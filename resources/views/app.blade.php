@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ config('app.name', 'Vote Église') }}</title>
+    <title>{{ config('app.name', 'compteur de votes') }}</title>
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,10 +14,14 @@
             theme: {
                 extend: {
                     colors: {
-                        primary:  { DEFAULT: '#1e40af', light: '#3b82f6', dark: '#1e3a8a' },
-                        success:  '#16a34a',
-                        warning:  '#d97706',
-                        danger:   '#dc2626',
+                        primary: {
+                            DEFAULT: '#1e40af',
+                            light: '#3b82f6',
+                            dark: '#1e3a8a'
+                        },
+                        success: '#16a34a',
+                        warning: '#d97706',
+                        danger: '#dc2626',
                     },
                     fontFamily: {
                         sans: ['Inter', 'ui-sans-serif', 'system-ui'],
@@ -32,7 +38,9 @@
     @vite(['resources/js/app.js'])
     @inertiaHead
 </head>
+
 <body class="bg-gray-50 text-gray-900 antialiased">
     @inertia
 </body>
+
 </html>
