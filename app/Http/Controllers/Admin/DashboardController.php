@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\BureauVote;
-use App\Models\VoteOption;
 use App\Models\BureauResult;
+use App\Models\BureauVote;
+use App\Models\VoteLog;
+use App\Models\VoteOption;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -17,20 +18,43 @@ class DashboardController extends Controller
         $validatedBureaux = BureauVote::where('status', 'validated')->count();
         $anomalyBureaux = BureauVote::where('status', 'anomaly')->count();
         $adminPvBureaux = BureauVote::where('status', 'pv_admin')->count();
-        
-        $progression = $totalBureaux > 0 
-            ? round(($validatedBureaux / $totalBureaux) * 100) 
+
+        $progression = $totalBureaux > 0
+            ? round(($validatedBureaux / $totalBureaux) * 100)
             : 0;
 
         // Résultats nationaux (bureaux validés uniquement)
-        $nationalResults = VoteOption::with(['bureauResults' => function($q) {
-            $q->whereHas('bureau', fn($q2) => $q2->where('status', 'validated'));
-        }])->get()->map(function($option) {
+        // Bureaux validés
+        $validatedBureauIds = BureauVote::where('status', 'validated')->pluck('id');
+
+        // Même logique que manualPv, mais agrégée sur tous les bureaux validés
+        $nationalResults = VoteOption::get()->map(function ($option) use ($validatedBureauIds) {
+
+            // Compteur système : VoteLogs +1 moins -1 (comme dans manualPv)
+            $plus = VoteLog::where('vote_option_id', $option->id)
+                ->whereIn('bureau_vote_id', $validatedBureauIds)
+                ->where('action', '+1')
+                ->count();
+
+            $minus = VoteLog::where('vote_option_id', $option->id)
+                ->whereIn('bureau_vote_id', $validatedBureauIds)
+                ->where('action', '-1')
+                ->count();
+
+            // PV papier : bureauResults (comme $pvValues dans manualPv)
+            $pvCount = BureauResult::where('vote_option_id', $option->id)
+                ->whereIn('bureau_vote_id', $validatedBureauIds)
+                ->sum('count');
+
+            $systemCount = $plus - $minus;
+
             return [
-                'id' => $option->id,
-                'nom' => $option->nom,
-                'type' => $option->type,
-                'total' => $option->bureauResults->sum('count'),
+                'id'           => $option->id,
+                'nom'          => $option->nom,
+                'type'         => $option->type,
+                'system_count' => $systemCount,
+                'pv_count'     => (int) $pvCount,
+                'ecart'        => (int) $pvCount - $systemCount,
             ];
         });
 

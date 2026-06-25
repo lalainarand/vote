@@ -18,13 +18,6 @@ const counts = reactive(
     )
 )
 
-// ── Anti double-clic : 500ms par option ───────────────────────────────────
-const lastClick = ref({})
-const debounced = (id) => {
-    const last = lastClick.value[id] ?? 0
-    return Date.now() - last < 500
-}
-
 // ── Animation compteur ────────────────────────────────────────────────────
 const animating = reactive({})
 const triggerAnimation = (id) => {
@@ -32,10 +25,24 @@ const triggerAnimation = (id) => {
     setTimeout(() => { animating[id] = false }, 300)
 }
 
+// ── Anti double-clic : état réactif par bouton ────────────────────────────
+// ✅ CORRIGÉ : on utilise un reactive object au lieu d'une fonction
+const disabledButtons = reactive({})
+
+const disableButton = (id) => {
+    disabledButtons[id] = true
+    setTimeout(() => {
+        disabledButtons[id] = false
+    }, 900) // 500ms de debounce
+}
+
 // ── Appel via axios (CSRF automatique) ────────────────────────────────────
 const vote = async (optionId, action) => {
-    if (debounced(optionId)) return
-    lastClick.value[optionId] = Date.now()
+    // Vérifier si le bouton est déjà désactivé
+    if (disabledButtons[optionId]) return
+
+    // Désactiver immédiatement (anti double-clic)
+    disableButton(optionId)
 
     const delta = action === '+1' ? 1 : -1
 
@@ -45,14 +52,12 @@ const vote = async (optionId, action) => {
     triggerAnimation(optionId)
 
     try {
-        // ✅ axios gère automatiquement le CSRF via le cookie XSRF-TOKEN
         const res = await axios.post('/operator/comptage/vote', {
             vote_option_id: optionId,
             action: action,
         })
 
         if (res.data.success) {
-            // Synchroniser avec la valeur serveur
             counts[optionId] = res.data.count
         }
     } catch (e) {
@@ -106,23 +111,44 @@ const vote = async (optionId, action) => {
                         v-for="c in candidates" :key="c.id"
                         class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm"
                     >
-                        <div class="flex items-start justify-between mb-5">
-                            <div>
-                                <div class="text-xs text-gray-400 mb-0.5">N° {{ c.ordre_affichage ?? c.id }}</div>
-                                <div class="text-base font-bold text-gray-900 leading-tight">{{ c.nom }}</div>
+                        <!-- ✅ NOUVEAU AFFICHAGE : Numéro bien visible + Nom en valeur -->
+                        <div class="flex items-center gap-4 mb-5">
+                            <!-- Badge numéro -->
+                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
+                                <span class="text-3xl font-black text-white">
+                                    {{ c.ordre_affichage ?? c.id }}
+                                </span>
                             </div>
+                            
+                            <!-- Nom du candidat -->
+                            <div class="flex-1 min-w-0">
+                                <div class="text-lg font-bold text-gray-900 leading-tight truncate">
+                                    {{ c.nom }}
+                                </div>
+                                <div class="text-xs text-gray-500 mt-0.5">
+                                    Candidat
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Compteur bien visible -->
+                        <div class="text-center mb-5">
                             <div
-                                class="text-5xl font-black text-blue-600 tabular-nums transition-transform duration-150"
+                                class="inline-block text-6xl font-black text-blue-600 tabular-nums transition-transform duration-150"
                                 :class="{ 'scale-110': animating[c.id] }"
                             >
                                 {{ counts[c.id] }}
                             </div>
+                            <div class="text-xs text-gray-400 mt-1 uppercase tracking-wide">
+                                Votes
+                            </div>
                         </div>
 
+                        <!-- Boutons +1 / -1 -->
                         <div class="flex gap-2">
                             <button
                                 @click="vote(c.id, '+1')"
-                                :disabled="debounced(c.id)"
+                                :disabled="disabledButtons[c.id]"
                                 class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
                                        disabled:opacity-50 disabled:cursor-not-allowed
                                        text-white font-bold py-4 rounded-xl text-xl
@@ -132,7 +158,7 @@ const vote = async (optionId, action) => {
                             </button>
                             <button
                                 @click="vote(c.id, '-1')"
-                                :disabled="debounced(c.id) || counts[c.id] === 0"
+                                :disabled="disabledButtons[c.id] || counts[c.id] === 0"
                                 class="flex-1 bg-red-500 hover:bg-red-600 active:scale-95
                                        disabled:opacity-50 disabled:cursor-not-allowed
                                        text-white font-bold py-4 rounded-xl text-xl
@@ -167,7 +193,7 @@ const vote = async (optionId, action) => {
                         <div class="flex gap-2">
                             <button
                                 @click="vote(c.id, '+1')"
-                                :disabled="debounced(c.id)"
+                                :disabled="disabledButtons[c.id]"
                                 class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
                                        disabled:opacity-50 disabled:cursor-not-allowed
                                        text-white font-bold py-3 rounded-xl
@@ -177,7 +203,7 @@ const vote = async (optionId, action) => {
                             </button>
                             <button
                                 @click="vote(c.id, '-1')"
-                                :disabled="debounced(c.id) || counts[c.id] === 0"
+                                :disabled="disabledButtons[c.id] || counts[c.id] === 0"
                                 class="flex-1 bg-red-500 hover:bg-red-600 active:scale-95
                                        disabled:opacity-50 disabled:cursor-not-allowed
                                        text-white font-bold py-3 rounded-xl

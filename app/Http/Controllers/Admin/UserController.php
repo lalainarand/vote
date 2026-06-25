@@ -110,6 +110,7 @@ class UserController extends Controller
             'email'          => $validated['email'],
             'password'       => Hash::make($validated['password']),
             'bureau_vote_id' => $validated['bureau_vote_id'] ?? null,
+            'email_verified_at' => now(),
         ]);
 
         $user->assignRole($validated['role']);

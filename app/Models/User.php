@@ -15,7 +15,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'bureau_vote_id'
+        'bureau_vote_id',
+        'email_verified_at',
     ];
 
     // Relations

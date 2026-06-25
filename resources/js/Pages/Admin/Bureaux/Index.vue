@@ -79,7 +79,6 @@ const deleteBureau = (id) => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Opérateur</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statistiques</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
@@ -96,13 +95,7 @@ const deleteBureau = (id) => {
                                 {{ statusLabel[bureau.status]?.label ?? bureau.status }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            <div v-if="bureau.statistics">
-                                Inscrits: {{ bureau.statistics.registered_voters }} |
-                                Votants: {{ bureau.statistics.voters }}
-                            </div>
-                            <div v-else class="text-gray-400">Non renseigné</div>
-                        </td>
+                       
                         <td class="px-4 py-3 text-right space-x-2">
                             <Link :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
                                   class="text-purple-600 hover:text-purple-800 text-sm font-medium">
