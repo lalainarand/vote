@@ -21,21 +21,150 @@ const form = useForm({
     mark_anomaly: false,
 })
 
-// Contrôles de cohérence
-const totalPv = computed(() => form.pv_data.reduce((sum, p) => sum + (parseInt(p.count) || 0), 0))
-const totalSystem = computed(() => props.counters.reduce((sum, c) => sum + c.system_count, 0))
+// Helper : cast sûr en entier (évite les NaN sur champ vidé)
+const toInt = (v) => {
+    const n = parseInt(v, 10)
+    return Number.isNaN(n) ? 0 : n
+}
 
-const controls = computed(() => ({
-    c1: form.pv_data.every(p => parseInt(p.count) === props.counters.find(c => c.id === p.vote_option_id)?.system_count),
-    c2: totalPv.value === form.ballots_found,
-    c3: form.ballots_found <= form.voters,
-    c4: form.voters <= form.registered_voters,
-}))
+const totalPv = computed(() =>
+    form.pv_data.reduce((s, p) => s + toInt(p.count), 0)
+)
 
-const allControlsPass = computed(() => Object.values(controls.value).every(v => v))
+// Styles par niveau de gravité
+const levelStyles = {
+    ok: {
+        box: 'bg-green-50 border-green-200',
+        icon: 'text-green-600',
+        text: 'text-green-800',
+        symbol: '✓',
+    },
+    error: {
+        box: 'bg-red-50 border-red-200',
+        icon: 'text-red-600',
+        text: 'text-red-800',
+        symbol: '✗',
+    },
+    warning: {
+        box: 'bg-amber-50 border-amber-200',
+        icon: 'text-amber-600',
+        text: 'text-amber-800',
+        symbol: '⚠',
+    },
+}
+
+// ── Détail des contrôles (source unique de vérité) ───────────────────
+const controlDetails = computed(() => {
+    const details = []
+
+    // ── C1 : Cohérence candidat par candidat ──────────────────────
+    const mismatches = form.pv_data
+        .map((p, idx) => ({ p, counter: props.counters[idx] }))
+        .filter(({ p, counter }) => toInt(p.count) !== counter.system_count)
+
+    if (mismatches.length === 0) {
+        details.push({
+            key: 'c1',
+            level: 'ok',
+            title: 'C1 — Cohérence candidat',
+            message: 'Tous les compteurs système correspondent au PV papier.',
+        })
+    } else {
+        const noms = mismatches.map(({ counter }) => counter.nom).join(', ')
+        details.push({
+            key: 'c1',
+            level: 'error',
+            title: 'C1 — Cohérence candidat',
+            message: `Écart détecté pour ${mismatches.length} candidat(s) : ${noms}. Vérifiez la saisie ou le comptage.`,
+        })
+    }
+
+    // ── C2 : Total bulletins = Bulletins trouvés ──────────────────
+    const ballotsFound = toInt(form.ballots_found)
+    const ecartC2 = totalPv.value - ballotsFound
+    if (ecartC2 === 0) {
+        details.push({
+            key: 'c2',
+            level: 'ok',
+            title: 'C2 — Total des bulletins',
+            message: `La somme des votes (${totalPv.value}) correspond aux bulletins trouvés.`,
+        })
+    } else if (ecartC2 > 0) {
+        details.push({
+            key: 'c2',
+            level: 'warning',
+            title: 'C2 — Total des bulletins',
+            message: `Le total des votes saisis dépasse de ${ecartC2} le nombre de bulletins trouvés (${totalPv.value} / ${ballotsFound}). Vérifiez le décompte.`,
+        })
+    } else {
+        details.push({
+            key: 'c2',
+            level: 'warning',
+            title: 'C2 — Total des bulletins',
+            message: `Il manque ${Math.abs(ecartC2)} vote(s) par rapport aux bulletins trouvés (${totalPv.value} / ${ballotsFound}). Vérifiez le décompte.`,
+        })
+    }
+
+    // ── C3 : Bulletins ≤ Votants ───────────────────────────────────
+    const voters = toInt(form.voters)
+    const ecartC3 = ballotsFound - voters
+    if (ecartC3 <= 0) {
+        details.push({
+            key: 'c3',
+            level: 'ok',
+            title: 'C3 — Bulletins ≤ Votants',
+            message: 'Le nombre de bulletins trouvés est cohérent avec le nombre de votants.',
+        })
+    } else {
+        details.push({
+            key: 'c3',
+            level: 'error',
+            title: 'C3 — Bulletins ≤ Votants',
+            message: `Anomalie critique : ${ecartC3} bulletin(s) de plus que de votants enregistrés. Situation physiquement impossible, à corriger avant validation.`,
+        })
+    }
+
+    // ── C4 : Votants ≤ Inscrits ──────────────────────────────────────
+    const registeredVoters = toInt(form.registered_voters)
+    const ecartC4 = voters - registeredVoters
+    if (ecartC4 <= 0) {
+        details.push({
+            key: 'c4',
+            level: 'ok',
+            title: 'C4 — Votants ≤ Inscrits',
+            message: "Le nombre de votants est cohérent avec le nombre d'inscrits.",
+        })
+    } else {
+        details.push({
+            key: 'c4',
+            level: 'error',
+            title: 'C4 — Votants ≤ Inscrits',
+            message: `Anomalie critique : ${ecartC4} votant(s) de plus que d'inscrits. Situation physiquement impossible, à corriger avant validation.`,
+        })
+    }
+
+    return details
+})
+
+const hasCriticalError = computed(() =>
+    controlDetails.value.some(d => d.level === 'error')
+)
+const hasWarning = computed(() =>
+    controlDetails.value.some(d => d.level === 'warning')
+)
+const allControlsPass = computed(() =>
+    controlDetails.value.every(d => d.level === 'ok')
+)
 
 const submit = () => {
+    // L'admin peut forcer l'enregistrement même en cas d'anomalie
+    // (contrairement à l'opérateur) — pas de blocage ici, juste l'info visuelle.
     form.post(`/admin/bureaux/${props.bureau.id}/pv-manuel`)
+}
+
+const markAnomalyAndSubmit = () => {
+    form.mark_anomaly = true
+    submit()
 }
 </script>
 
@@ -79,8 +208,8 @@ const submit = () => {
                                            class="w-24 px-2 py-1 border border-gray-300 rounded text-center" />
                                 </td>
                                 <td class="px-3 py-2 text-center text-sm font-mono"
-                                    :class="(form.pv_data[idx].count - counter.system_count) === 0 ? 'text-green-600' : 'text-red-600'">
-                                    {{ form.pv_data[idx].count - counter.system_count }}
+                                    :class="(toInt(form.pv_data[idx].count) - counter.system_count) === 0 ? 'text-green-600' : 'text-red-600'">
+                                    {{ toInt(form.pv_data[idx].count) - counter.system_count }}
                                 </td>
                             </tr>
                         </tbody>
@@ -106,33 +235,40 @@ const submit = () => {
                     </div>
                 </div>
 
-                <!-- Contrôles -->
-                <div class="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <h3 class="text-sm font-semibold text-gray-700 mb-2">Contrôles de cohérence</h3>
-                    <div class="flex items-center gap-2">
-                        <span :class="controls.c1 ? 'text-green-600' : 'text-red-600'">
-                            {{ controls.c1 ? '✓' : '✗' }}
-                        </span>
-                        <span class="text-sm text-gray-700">C1 - Cohérence candidat</span>
+                <!-- Contrôles de cohérence (détaillés) -->
+                <div class="bg-gray-50 rounded-xl p-6">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3 uppercase">Contrôles de cohérence</h3>
+                    <div class="space-y-2.5">
+                        <div
+                            v-for="detail in controlDetails"
+                            :key="detail.key"
+                            class="flex items-start gap-3 rounded-lg border px-4 py-3"
+                            :class="levelStyles[detail.level].box"
+                        >
+                            <span class="text-lg font-bold leading-none mt-0.5" :class="levelStyles[detail.level].icon">
+                                {{ levelStyles[detail.level].symbol }}
+                            </span>
+                            <div>
+                                <div class="text-sm font-semibold" :class="levelStyles[detail.level].text">
+                                    {{ detail.title }}
+                                </div>
+                                <div class="text-sm mt-0.5" :class="levelStyles[detail.level].text">
+                                    {{ detail.message }}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <span :class="controls.c2 ? 'text-green-600' : 'text-red-600'">
-                            {{ controls.c2 ? '✓' : '✗' }}
-                        </span>
-                        <span class="text-sm text-gray-700">C2 - Total bulletins</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span :class="controls.c3 ? 'text-green-600' : 'text-red-600'">
-                            {{ controls.c3 ? '✓' : '✗' }}
-                        </span>
-                        <span class="text-sm text-gray-700">C3 - Bulletins ≤ Votants</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span :class="controls.c4 ? 'text-green-600' : 'text-red-600'">
-                            {{ controls.c4 ? '✓' : '✗' }}
-                        </span>
-                        <span class="text-sm text-gray-700">C4 - Votants ≤ Inscrits</span>
-                    </div>
+
+                    <p v-if="hasCriticalError" class="mt-3 text-sm font-medium text-red-700">
+                        Anomalie(s) critique(s) détectée(s) (C3/C4). En tant qu'admin vous pouvez tout de même
+                        enregistrer, mais pensez à motiver la saisie ci-dessous ou à marquer une anomalie.
+                    </p>
+                    <p v-else-if="hasWarning" class="mt-3 text-sm font-medium text-amber-700">
+                        Des écarts non bloquants subsistent (C2). Vérifiez avant validation.
+                    </p>
+                    <p v-else class="mt-3 text-sm font-medium text-green-700">
+                        Tous les contrôles sont conformes.
+                    </p>
                 </div>
 
                 <!-- Note -->
@@ -151,7 +287,7 @@ const submit = () => {
                         Enregistrer le PV
                     </button>
                     <button type="button"
-                            @click="form.mark_anomaly = true; submit()"
+                            @click="markAnomalyAndSubmit"
                             :disabled="form.processing"
                             class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50">
                         Marquer anomalie

@@ -28,25 +28,30 @@ class DashboardController extends Controller
                 ->where('vote_option_id', $option->id)
                 ->where('action', '+1')
                 ->sum('quantity');
-
             $minus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $option->id)
                 ->where('action', '-1')
                 ->sum('quantity');
-
             $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $option->id)
                 ->where('is_procuration', true)
                 ->sum('quantity');
 
             return [
-                'id'          => $option->id,
-                'nom'         => $option->nom,
-                'type'        => $option->type,
-                'count'       => $plus - $minus,
-                'procuration' => $procuration,
+                'id'               => $option->id,
+                'nom'              => $option->nom,
+                'type'             => $option->type,
+                'photo'            => $option->photo,
+                'ordre_affichage'  => $option->ordre_affichage,
+                'count'            => $plus - $minus,
+                'procuration'      => (int) $procuration,
             ];
         });
+
+        // Total procurations pour ce bureau, toutes options confondues
+        $totalProcuration = VoteLog::where('bureau_vote_id', $bureau->id)
+            ->where('is_procuration', true)
+            ->sum('quantity');
 
         // Résultats PV (si saisis)
         $pvResults = BureauResult::where('bureau_vote_id', $bureau->id)
@@ -68,8 +73,9 @@ class DashboardController extends Controller
         return Inertia::render('Operator/Dashboard', [
             'bureau' => $bureau,
             'counters' => $counters,
-            'pvResults' => $pvResults,
-            'stats' => $stats,
+            'pv_results' => $pvResults,
+            'statistics' => $stats,
+            'total_procuration' => (int) $totalProcuration,
         ]);
     }
 }

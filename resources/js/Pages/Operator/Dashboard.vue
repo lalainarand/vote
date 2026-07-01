@@ -19,8 +19,16 @@ const statusLabel = {
     anomaly:   { label: 'Anomalie',    cls: 'bg-red-100 text-red-700' },
 }
 
-const candidates = props.counters.filter(c => c.type === 'candidat' || c.type === 'nul'|| c.type === 'blanc' )
+const candidates = props.counters.filter(c => c.type === 'candidat' || c.type === 'nul' || c.type === 'blanc')
 const totalVotes = candidates.reduce((sum, c) => sum + c.count, 0)
+
+const getPhotoUrl = (c) => {
+    return c.photo ? `/storage/${c.photo}` : null
+}
+
+const onImgError = (e) => {
+    e.target.src = '/images/candidat-placeholder.png'
+}
 </script>
 
 <template>
@@ -55,16 +63,33 @@ const totalVotes = candidates.reduce((sum, c) => sum + c.count, 0)
                     <h2 class="font-semibold text-gray-800">Comptage en cours</h2>
                 </div>
                 <div class="p-6">
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div v-for="counter in counters" :key="counter.id"
-                             class="bg-gray-50 rounded-xl p-4 text-center">
-                            <div class="text-sm text-gray-600 mb-1">{{ counter.nom }}</div>
-                            <div class="text-3xl font-bold text-gray-900">{{ counter.count }}</div>
-                            <div v-if="counter.procuration > 0" class="text-xs text-purple-600 font-medium mt-1">
-                                dont {{ counter.procuration }} par procuration
-                            </div>
-                        </div>
-                    </div>
+                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+    <div v-for="counter in counters" :key="counter.id"
+         class="bg-gray-50 rounded-xl overflow-hidden text-center">
+
+        <!-- Image en cadre, hauteur fixe -->
+        <div v-if="counter.type === 'candidat'" class="relative w-full h-28 bg-gray-200">
+            <img
+                :src="getPhotoUrl(counter) || '/images/candidat-placeholder.png'"
+                @error="onImgError"
+                :alt="counter.nom"
+                class="w-full h-full object-cover"
+            />
+            <span v-if="counter.ordre_affichage"
+                  class="absolute top-1.5 left-1.5 inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs shadow">
+                {{ counter.ordre_affichage }}
+            </span>
+        </div>
+
+        <div class="p-2.5">
+            <div class="text-xs text-gray-600 mb-1 truncate">{{ counter.nom }}</div>
+            <div class="text-xl font-bold text-gray-900">{{ counter.count }}</div>
+            <div v-if="counter.procuration > 0" class="text-[10px] text-purple-600 font-medium mt-0.5">
+                dont {{ counter.procuration }} par procuration
+            </div>
+        </div>
+    </div>
+</div>
                     <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-6 text-center flex-wrap">
                         <div>
                             <span class="text-sm text-gray-500">Total votes exprimés : </span>
