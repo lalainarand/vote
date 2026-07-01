@@ -64,7 +64,7 @@ const candidatesRanked = computed(() =>
                 <div class="text-3xl font-bold text-green-600">
                     {{ total_candidates_pv.toLocaleString('fr-FR') }}
                 </div>
-                <div class="text-sm text-gray-500 mt-1">Votes exprimés (PV)</div>
+                <div class="text-sm text-gray-500 mt-1">Votes validés</div>
                 <div class="text-xs text-gray-400 mt-1">
                     Syst. : {{ total_candidates_system.toLocaleString('fr-FR') }}
                 </div>
