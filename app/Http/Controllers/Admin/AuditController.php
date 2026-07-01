@@ -33,6 +33,9 @@ class AuditController extends Controller
         if ($request->filled('date_to')) {
             $query->where('created_at', '<=', $request->date_to . ' 23:59:59');
         }
+        if ($request->filled('procuration')) {
+            $query->where('is_procuration', $request->procuration === '1');
+        }
 
         $logs = $query->paginate(50)->withQueryString();
 
@@ -40,6 +43,8 @@ class AuditController extends Controller
             return [
                 'id' => $log->id,
                 'action' => $log->action,
+                'quantity' => $log->quantity,
+                'is_procuration' => $log->is_procuration,
                 'created_at' => Carbon::parse($log->created_at)->format('d/m/Y H:i:s'),
                 'bureau' => $log->bureau ? [
                     'code' => $log->bureau->code,
@@ -49,9 +54,10 @@ class AuditController extends Controller
                 'user' => $log->user?->name,
             ];
         });
+
         return Inertia::render('Admin/Audit/Index', [
             'logs' => $logs,
-            'filters' => $request->only(['bureau_id', 'user_id', 'action', 'date_from', 'date_to']),
+            'filters' => $request->only(['bureau_id', 'user_id', 'action', 'date_from', 'date_to', 'procuration']),
             'bureaux' => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
             'users' => User::orderBy('name')->get(['id', 'name']),
         ]);

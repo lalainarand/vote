@@ -42,12 +42,13 @@ const onImgError = (e) => {
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photo</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes enregistrés</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Procuration</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="candidates.length === 0">
-                        <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">
+                        <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">
                             Aucun candidat créé
                         </td>
                     </tr>
@@ -72,12 +73,19 @@ const onImgError = (e) => {
                                 {{ c.vote_logs_count }}
                             </span>
                         </td>
+                        <td class="px-4 py-3 text-center">
+                            <span v-if="c.procuration > 0"
+                                  class="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                                {{ c.procuration }}
+                            </span>
+                            <span v-else class="text-xs text-gray-300">—</span>
+                        </td>
                         <td class="px-4 py-3 text-right space-x-3">
                             <Link :href="`/admin/candidats/${c.id}/edit`"
                                   class="text-blue-600 hover:text-blue-800 text-sm font-medium">
                                 Modifier
                             </Link>
-                            <button v-if="c.vote_logs_count === 0"
+                            <button v-if="!c.has_logs"
                                     @click="deleteCandidate(c.id, c.nom)"
                                     class="text-red-600 hover:text-red-800 text-sm font-medium">
                                 Supprimer

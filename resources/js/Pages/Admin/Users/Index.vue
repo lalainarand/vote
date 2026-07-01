@@ -87,7 +87,7 @@ const deleteUser = (id, name) => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Email</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rôle</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Bureau assigné</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes saisis</th>
+                        <!-- <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes saisis</th> -->
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
@@ -113,12 +113,12 @@ const deleteUser = (id, name) => {
                             </template>
                             <span v-else class="text-gray-400 italic">—</span>
                         </td>
-                        <td class="px-4 py-3 text-center">
+                        <!-- <td class="px-4 py-3 text-center">
                             <span :class="u.vote_logs_count > 0 ? 'text-orange-600' : 'text-gray-400'"
                                   class="text-sm font-semibold">
                                 {{ u.vote_logs_count }}
                             </span>
-                        </td>
+                        </td> -->
                         <td class="px-4 py-3 text-right space-x-3">
                             <Link :href="`/admin/users/${u.id}/edit`"
                                   class="text-blue-600 hover:text-blue-800 text-sm font-medium">

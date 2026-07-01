@@ -36,7 +36,7 @@ const disableButton = (id) => {
 const getPhotoUrl = (c) => c.photo ? `/storage/${c.photo}` : null
 const onImgError = (e) => { e.target.src = '/images/candidat-placeholder.png' }
 
-// ── Appel via axios (CSRF automatique) ────────────────────────────────────
+// ── Vote +1 / -1 classique ─────────────────────────────────────────────────
 const vote = async (optionId, action) => {
     if (disabledButtons[optionId]) return
     disableButton(optionId)
@@ -72,6 +72,50 @@ const vote = async (optionId, action) => {
         } else {
             console.error('Erreur réseau :', e)
         }
+    }
+}
+
+// ── Saisie manuelle (procuration) ───────────────────────────────────────────
+const procurationInputs = reactive({})
+const procurationLoading = reactive({})
+const procurationErrors = reactive({})
+
+const submitProcuration = async (optionId) => {
+    const qty = procurationInputs[optionId]
+
+    if (!qty || qty < 1) {
+        procurationErrors[optionId] = 'Entrez un nombre valide'
+        return
+    }
+
+    if (procurationLoading[optionId]) return
+    procurationLoading[optionId] = true
+    procurationErrors[optionId] = null
+
+    try {
+        const res = await axios.post('/operator/comptage/vote-manuel', {
+            vote_option_id: optionId,
+            quantity: qty,
+        })
+
+        if (res.data.success) {
+            counts[optionId] = res.data.count
+            triggerAnimation(optionId)
+            procurationInputs[optionId] = null
+        }
+    } catch (e) {
+        if (e.response?.status === 422) {
+            procurationErrors[optionId] = e.response.data.errors?.quantity?.[0]
+                || e.response.data.message
+                || 'Valeur invalide'
+        } else if (e.response?.status === 403) {
+            alert(e.response.data.error || 'Ce bureau est verrouillé.')
+        } else {
+            procurationErrors[optionId] = 'Erreur lors de l\'enregistrement'
+            console.error(e)
+        }
+    } finally {
+        procurationLoading[optionId] = false
     }
 }
 </script>
@@ -133,7 +177,7 @@ const vote = async (optionId, action) => {
                         </div>
 
                         <!-- Boutons +1 / -1 -->
-                        <div class="flex gap-1.5 w-full">
+                        <div class="flex gap-1.5 w-full mb-2">
                             <button
                                 @click="vote(c.id, '+1')"
                                 :disabled="disabledButtons[c.id]"
@@ -154,6 +198,36 @@ const vote = async (optionId, action) => {
                             >
                                 −1
                             </button>
+                        </div>
+
+                        <!-- ── Saisie manuelle / Procuration ────────────────── -->
+                        <div class="w-full pt-2 border-t border-gray-100">
+                            <div class="flex gap-1.5">
+                                <input
+                                    v-model.number="procurationInputs[c.id]"
+                                    type="number"
+                                    min="1"
+                                    placeholder="Nb"
+                                    class="w-full min-w-0 text-xs px-2 py-1.5 border border-gray-300 rounded-lg
+                                           focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                />
+                                <button
+                                    @click="submitProcuration(c.id)"
+                                    :disabled="procurationLoading[c.id] || !procurationInputs[c.id]"
+                                    class="bg-purple-600 hover:bg-purple-700 active:scale-95
+                                           disabled:opacity-50 disabled:cursor-not-allowed
+                                           text-white text-xs font-bold px-2.5 py-1.5 rounded-lg
+                                           whitespace-nowrap transition-all duration-100 select-none"
+                                >
+                                    Valider
+                                </button>
+                            </div>
+                            <p v-if="procurationErrors[c.id]" class="text-[10px] text-red-600 mt-1">
+                                {{ procurationErrors[c.id] }}
+                            </p>
+                            <p class="text-[10px] text-gray-400 mt-1 leading-tight">
+                                Saisie manuelle réservée aux votes par procuration
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -178,7 +252,7 @@ const vote = async (optionId, action) => {
                                 {{ counts[c.id] }}
                             </div>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 mb-3">
                             <button
                                 @click="vote(c.id, '+1')"
                                 :disabled="disabledButtons[c.id]"
@@ -199,6 +273,36 @@ const vote = async (optionId, action) => {
                             >
                                 −1
                             </button>
+                        </div>
+
+                        <!-- ── Saisie manuelle / Procuration ────────────────── -->
+                        <div class="pt-3 border-t border-gray-100">
+                            <div class="flex gap-2">
+                                <input
+                                    v-model.number="procurationInputs[c.id]"
+                                    type="number"
+                                    min="1"
+                                    placeholder="Nombre de votes"
+                                    class="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg
+                                           focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                />
+                                <button
+                                    @click="submitProcuration(c.id)"
+                                    :disabled="procurationLoading[c.id] || !procurationInputs[c.id]"
+                                    class="bg-purple-600 hover:bg-purple-700 active:scale-95
+                                           disabled:opacity-50 disabled:cursor-not-allowed
+                                           text-white text-sm font-bold px-4 py-2 rounded-lg
+                                           whitespace-nowrap transition-all duration-100 select-none"
+                                >
+                                    Valider
+                                </button>
+                            </div>
+                            <p v-if="procurationErrors[c.id]" class="text-xs text-red-600 mt-1">
+                                {{ procurationErrors[c.id] }}
+                            </p>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Saisie manuelle réservée aux votes par procuration
+                            </p>
                         </div>
                     </div>
                 </div>

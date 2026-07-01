@@ -24,24 +24,28 @@ class DashboardController extends Controller
             : 0;
 
         // Résultats nationaux (bureaux validés uniquement)
-        // Bureaux validés
         $validatedBureauIds = BureauVote::where('status', 'validated')->pluck('id');
 
-        // Même logique que manualPv, mais agrégée sur tous les bureaux validés
         $nationalResults = VoteOption::get()->map(function ($option) use ($validatedBureauIds) {
 
-            // Compteur système : VoteLogs +1 moins -1 (comme dans manualPv)
+            // Compteur système : VoteLogs +1 moins -1, quantity incluse (procurations)
             $plus = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $validatedBureauIds)
                 ->where('action', '+1')
-                ->count();
+                ->sum('quantity');
 
             $minus = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $validatedBureauIds)
                 ->where('action', '-1')
-                ->count();
+                ->sum('quantity');
 
-            // PV papier : bureauResults (comme $pvValues dans manualPv)
+            // Total procurations pour ce candidat, tous bureaux validés confondus
+            $procuration = VoteLog::where('vote_option_id', $option->id)
+                ->whereIn('bureau_vote_id', $validatedBureauIds)
+                ->where('is_procuration', true)
+                ->sum('quantity');
+
+            // PV papier
             $pvCount = BureauResult::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $validatedBureauIds)
                 ->sum('count');
@@ -53,10 +57,16 @@ class DashboardController extends Controller
                 'nom'          => $option->nom,
                 'type'         => $option->type,
                 'system_count' => $systemCount,
+                'procuration'  => (int) $procuration,
                 'pv_count'     => (int) $pvCount,
                 'ecart'        => (int) $pvCount - $systemCount,
             ];
         });
+
+        // Total procurations national, toutes options confondues
+        $totalProcurationNational = VoteLog::whereIn('bureau_vote_id', $validatedBureauIds)
+            ->where('is_procuration', true)
+            ->sum('quantity');
 
         // Répartition des statuts
         $statusBreakdown = BureauVote::selectRaw('status, COUNT(*) as count')
@@ -87,6 +97,7 @@ class DashboardController extends Controller
                 'anomaly_bureaux' => $anomalyBureaux,
                 'admin_pv_bureaux' => $adminPvBureaux,
                 'progression' => $progression,
+                'total_procuration' => (int) $totalProcurationNational,
             ],
             'national_results' => $nationalResults,
             'status_breakdown' => $statusBreakdown,

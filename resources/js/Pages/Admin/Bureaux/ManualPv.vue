@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, useForm } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
     bureau: Object,
@@ -67,7 +67,12 @@ const submit = () => {
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <tr v-for="(counter, idx) in counters" :key="counter.id">
-                                <td class="px-3 py-2 text-sm text-gray-900">{{ counter.nom }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-900">
+                                    {{ counter.nom }}
+                                    <div v-if="counter.procuration > 0" class="text-xs text-purple-600 font-normal mt-0.5">
+                                        dont {{ counter.procuration }} par procuration
+                                    </div>
+                                </td>
                                 <td class="px-3 py-2 text-center text-sm font-mono text-gray-600">{{ counter.system_count }}</td>
                                 <td class="px-3 py-2 text-center">
                                     <input v-model.number="form.pv_data[idx].count" type="number" min="0"

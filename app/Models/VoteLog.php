@@ -6,9 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class VoteLog extends Model
 {
-    public $timestamps = false;  // pas de updated_at
-    protected $fillable = ['bureau_vote_id', 'vote_option_id', 'user_id', 'action', 'created_at'];
-
+    public $timestamps = false; 
+    protected $fillable = [
+        'bureau_vote_id',
+        'vote_option_id',
+        'user_id',
+        'action',
+        'quantity',
+        'is_procuration',
+        'created_at',
+    ];
     public function bureau()
     {
         return $this->belongsTo(BureauVote::class, 'bureau_vote_id');

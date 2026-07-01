@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\VoteLog;
 use App\Models\VoteOption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -14,8 +15,30 @@ class CandidateController extends Controller
     {
         $candidates = VoteOption::where('type', 'candidat')
             ->orderBy('ordre_affichage')
-            ->withCount('voteLogs')
-            ->get();
+            ->get()
+            ->map(function ($option) {
+                $plus = VoteLog::where('vote_option_id', $option->id)
+                    ->where('action', '+1')
+                    ->sum('quantity');
+
+                $minus = VoteLog::where('vote_option_id', $option->id)
+                    ->where('action', '-1')
+                    ->sum('quantity');
+
+                $procuration = VoteLog::where('vote_option_id', $option->id)
+                    ->where('is_procuration', true)
+                    ->sum('quantity');
+
+                return [
+                    'id'              => $option->id,
+                    'nom'             => $option->nom,
+                    'photo'           => $option->photo,
+                    'ordre_affichage' => $option->ordre_affichage,
+                    'vote_logs_count' => $plus - $minus,
+                    'procuration'     => (int) $procuration,
+                    'has_logs'        => VoteLog::where('vote_option_id', $option->id)->exists(),
+                ];
+            });
 
         return Inertia::render('Admin/Candidats/Index', [
             'candidates' => $candidates,

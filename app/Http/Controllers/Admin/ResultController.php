@@ -21,16 +21,22 @@ class ResultController extends Controller
 
         $results = $options->map(function ($option) use ($validatedBureauIds) {
 
-            // --- Compteur système (VoteLogs, même logique que manualPv) ---
+            // --- Compteur système (VoteLogs, quantity incluse pour les procurations) ---
             $plus  = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $validatedBureauIds)
                 ->where('action', '+1')
-                ->count();
+                ->sum('quantity');
             $minus = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $validatedBureauIds)
                 ->where('action', '-1')
-                ->count();
+                ->sum('quantity');
             $systemCount = $plus - $minus;
+
+            // --- Procuration (part du système count venant de saisies manuelles) ---
+            $procuration = VoteLog::where('vote_option_id', $option->id)
+                ->whereIn('bureau_vote_id', $validatedBureauIds)
+                ->where('is_procuration', true)
+                ->sum('quantity');
 
             // --- PV papier (BureauResults) avec répartition par source ---
             $bureauResults = BureauResult::where('vote_option_id', $option->id)
@@ -49,31 +55,39 @@ class ResultController extends Controller
                 'nom'          => $option->nom,
                 'type'         => $option->type,
                 'system_count' => $systemCount,
+                'procuration'  => (int) $procuration,
                 'pv_count'     => $pvCount,
                 'ecart'        => $pvCount - $systemCount,
                 'by_source'    => $bySource,
             ];
         });
 
-        $totalCandidatesPv     = $results->where('type', 'candidat')->sum('pv_count');
-        $totalCandidatesSystem = $results->where('type', 'candidat')->sum('system_count');
+        $totalCandidatesPv          = $results->where('type', 'candidat')->sum('pv_count');
+        $totalCandidatesSystem      = $results->where('type', 'candidat')->sum('system_count');
+        $totalCandidatesProcuration = $results->where('type', 'candidat')->sum('procuration');
+
+        // Total procuration toutes options confondues (candidats + blanc/nul)
+        $totalProcuration = VoteLog::whereIn('bureau_vote_id', $validatedBureauIds)
+            ->where('is_procuration', true)
+            ->sum('quantity');
 
         $sourceBreakdown = BureauVote::whereIn('bureaux_vote.id', $validatedBureauIds)
-    ->join('bureau_results', 'bureaux_vote.id', '=', 'bureau_results.bureau_vote_id')
-    ->selectRaw('bureau_results.source, COUNT(DISTINCT bureaux_vote.id) as count')
-    ->groupBy('bureau_results.source')
-    ->pluck('count', 'source');
+            ->join('bureau_results', 'bureaux_vote.id', '=', 'bureau_results.bureau_vote_id')
+            ->selectRaw('bureau_results.source, COUNT(DISTINCT bureaux_vote.id) as count')
+            ->groupBy('bureau_results.source')
+            ->pluck('count', 'source');
 
         return Inertia::render('Admin/Resultats/Index', [
-            'results'                => $results,
-            'total_candidates_pv'    => $totalCandidatesPv,
-            'total_candidates_system' => $totalCandidatesSystem,
-            'validated_bureaux'      => $validatedBureaux,
-            'total_bureaux'          => $totalBureaux,
-            'source_breakdown'       => $sourceBreakdown,
+            'results'                    => $results,
+            'total_candidates_pv'        => $totalCandidatesPv,
+            'total_candidates_system'    => $totalCandidatesSystem,
+            'total_candidates_procuration' => (int) $totalCandidatesProcuration,
+            'total_procuration'          => (int) $totalProcuration,
+            'validated_bureaux'          => $validatedBureaux,
+            'total_bureaux'              => $totalBureaux,
+            'source_breakdown'           => $sourceBreakdown,
         ]);
     }
-
     public function export()
     {
         // Export CSV simple (pour V2 : Excel avec PhpSpreadsheet)

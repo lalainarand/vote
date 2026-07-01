@@ -208,21 +208,29 @@ class BureauController extends Controller
     {
         $bureau->load(['statistics', 'bureauResults']);
 
-        // Compteurs système (somme des logs)
-        $counters = VoteOption::withCount(['voteLogs' => function ($q) use ($bureau) {
-            $q->where('bureau_vote_id', $bureau->id)
-                ->where('action', '+1');
-        }])->get()->map(function ($option) use ($bureau) {
+        // Compteurs système (procurations incluses via quantity)
+        $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($option) use ($bureau) {
+            $plus = VoteLog::where('bureau_vote_id', $bureau->id)
+                ->where('vote_option_id', $option->id)
+                ->where('action', '+1')
+                ->sum('quantity');
+
             $minus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $option->id)
                 ->where('action', '-1')
-                ->count();
+                ->sum('quantity');
+
+            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
+                ->where('vote_option_id', $option->id)
+                ->where('is_procuration', true)
+                ->sum('quantity');
 
             return [
                 'id' => $option->id,
                 'nom' => $option->nom,
                 'type' => $option->type,
-                'system_count' => $option->vote_logs_count - $minus,
+                'system_count' => $plus - $minus,
+                'procuration' => $procuration,
             ];
         });
 

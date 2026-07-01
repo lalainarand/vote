@@ -3,11 +3,12 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link } from '@inertiajs/vue3'
 
 const props = defineProps({
-    bureau:     Object,
-    counters:   Array,
-    pv_results: Array,
-    statistics: Object,
-    error:      String,
+    bureau:            Object,
+    counters:          Array,
+    pv_results:        Array,
+    statistics:        Object,
+    error:             String,
+    total_procuration: Number,
 })
 
 const statusLabel = {
@@ -59,11 +60,20 @@ const totalVotes = candidates.reduce((sum, c) => sum + c.count, 0)
                              class="bg-gray-50 rounded-xl p-4 text-center">
                             <div class="text-sm text-gray-600 mb-1">{{ counter.nom }}</div>
                             <div class="text-3xl font-bold text-gray-900">{{ counter.count }}</div>
+                            <div v-if="counter.procuration > 0" class="text-xs text-purple-600 font-medium mt-1">
+                                dont {{ counter.procuration }} par procuration
+                            </div>
                         </div>
                     </div>
-                    <div class="mt-4 pt-4 border-t border-gray-100 text-center">
-                        <span class="text-sm text-gray-500">Total votes exprimés : </span>
-                        <span class="text-lg font-bold text-gray-900">{{ totalVotes }}</span>
+                    <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-6 text-center flex-wrap">
+                        <div>
+                            <span class="text-sm text-gray-500">Total votes exprimés : </span>
+                            <span class="text-lg font-bold text-gray-900">{{ totalVotes }}</span>
+                        </div>
+                        <div v-if="total_procuration > 0">
+                            <span class="text-sm text-purple-600">Dont procurations : </span>
+                            <span class="text-lg font-bold text-purple-700">{{ total_procuration }}</span>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -4,12 +4,14 @@ import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
 const props = defineProps({
-    results:                 Array,
-    total_candidates_pv:     Number,
-    total_candidates_system: Number,
-    validated_bureaux:       Number,
-    total_bureaux:           Number,
-    source_breakdown:        Object,
+    results:                       Array,
+    total_candidates_pv:           Number,
+    total_candidates_system:       Number,
+    total_candidates_procuration:  Number,
+    total_procuration:             Number,
+    validated_bureaux:             Number,
+    total_bureaux:                 Number,
+    source_breakdown:              Object,
 })
 
 // Vue active : 'pv' ou 'system'
@@ -46,7 +48,7 @@ const candidatesRanked = computed(() =>
         </template>
 
         <!-- Stats -->
-        <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-3xl font-bold text-gray-900">
                     {{ validated_bureaux }} / {{ total_bureaux }}
@@ -65,6 +67,15 @@ const candidatesRanked = computed(() =>
                 <div class="text-sm text-gray-500 mt-1">Votes exprimés (PV)</div>
                 <div class="text-xs text-gray-400 mt-1">
                     Syst. : {{ total_candidates_system.toLocaleString('fr-FR') }}
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-100 p-5">
+                <div class="text-3xl font-bold text-purple-600">
+                    {{ total_procuration.toLocaleString('fr-FR') }}
+                </div>
+                <div class="text-sm text-gray-500 mt-1">Votes par procuration</div>
+                <div class="text-xs text-gray-400 mt-1">
+                    Candidats : {{ total_candidates_procuration.toLocaleString('fr-FR') }}
                 </div>
             </div>
             <div class="bg-white rounded-xl border border-gray-100 p-5">
@@ -132,6 +143,7 @@ const candidatesRanked = computed(() =>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-8">#</th>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Candidat</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Syst.</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Procuration</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">PV papier</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Écart</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-16">%</th>
@@ -145,6 +157,10 @@ const candidatesRanked = computed(() =>
                         <td class="px-4 py-3 text-sm font-medium text-gray-800">{{ r.nom }}</td>
                         <td class="px-4 py-3 text-right text-sm font-mono text-gray-400">
                             {{ r.system_count.toLocaleString('fr-FR') }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-mono"
+                            :class="r.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
+                            {{ r.procuration > 0 ? r.procuration.toLocaleString('fr-FR') : '—' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm font-mono font-semibold text-gray-900">
                             {{ r.pv_count.toLocaleString('fr-FR') }}
@@ -187,6 +203,7 @@ const candidatesRanked = computed(() =>
                     <tr>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Type</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Syst.</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Procuration</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">PV papier</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Écart</th>
                     </tr>
@@ -196,6 +213,10 @@ const candidatesRanked = computed(() =>
                         <td class="px-4 py-3 text-sm font-medium text-gray-700">{{ r.nom }}</td>
                         <td class="px-4 py-3 text-right text-sm font-mono text-gray-400">
                             {{ r.system_count.toLocaleString('fr-FR') }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-mono"
+                            :class="r.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
+                            {{ r.procuration > 0 ? r.procuration.toLocaleString('fr-FR') : '—' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm font-mono font-semibold text-gray-900">
                             {{ r.pv_count.toLocaleString('fr-FR') }}

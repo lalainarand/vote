@@ -22,21 +22,29 @@ class DashboardController extends Controller
             ]);
         }
 
-        // Compteurs en temps réel (somme des logs)
-        $counters = VoteOption::withCount(['voteLogs' => function($q) use ($bureau) {
-            $q->where('bureau_vote_id', $bureau->id)
-              ->where('action', '+1');
-        }])->get()->map(function($option) use ($bureau) {
+        // Compteurs en temps réel (somme des logs, procurations incluses)
+        $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($option) use ($bureau) {
+            $plus = VoteLog::where('bureau_vote_id', $bureau->id)
+                ->where('vote_option_id', $option->id)
+                ->where('action', '+1')
+                ->sum('quantity');
+
             $minus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $option->id)
                 ->where('action', '-1')
-                ->count();
-            
+                ->sum('quantity');
+
+            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
+                ->where('vote_option_id', $option->id)
+                ->where('is_procuration', true)
+                ->sum('quantity');
+
             return [
-                'id' => $option->id,
-                'nom' => $option->nom,
-                'type' => $option->type,
-                'count' => $option->vote_logs_count - $minus,
+                'id'          => $option->id,
+                'nom'         => $option->nom,
+                'type'        => $option->type,
+                'count'       => $plus - $minus,
+                'procuration' => $procuration,
             ];
         });
 
@@ -58,15 +66,10 @@ class DashboardController extends Controller
         ] : null;
 
         return Inertia::render('Operator/Dashboard', [
-            'bureau' => [
-                'id' => $bureau->id,
-                'code' => $bureau->code,
-                'nom' => $bureau->nom,
-                'status' => $bureau->status,
-            ],
+            'bureau' => $bureau,
             'counters' => $counters,
-            'pv_results' => $pvResults,
-            'statistics' => $stats,
+            'pvResults' => $pvResults,
+            'stats' => $stats,
         ]);
     }
 }

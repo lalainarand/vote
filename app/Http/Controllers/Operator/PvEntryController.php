@@ -22,17 +22,27 @@ class PvEntryController extends Controller
             abort(403, 'Aucun bureau assigné');
         }
 
-        // Compteurs système
+        // Compteurs système (procurations incluses via quantity)
         $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($opt) use ($bureau) {
             $plus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $opt->id)->where('action', '+1')->count();
+                ->where('vote_option_id', $opt->id)
+                ->where('action', '+1')
+                ->sum('quantity');
             $minus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $opt->id)->where('action', '-1')->count();
+                ->where('vote_option_id', $opt->id)
+                ->where('action', '-1')
+                ->sum('quantity');
+            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
+                ->where('vote_option_id', $opt->id)
+                ->where('is_procuration', true)
+                ->sum('quantity');
+
             return [
                 'id' => $opt->id,
                 'nom' => $opt->nom,
                 'type' => $opt->type,
                 'system_count' => $plus - $minus,
+                'procuration' => $procuration,
             ];
         });
 

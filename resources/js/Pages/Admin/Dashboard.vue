@@ -36,13 +36,17 @@ const others = computed(() =>
     props.national_results.filter(r => r.type !== 'candidat')
 )
 
+// Totaux basés sur TOUTES les options (candidats + blanc/nul), pas seulement candidats
 const totalSysteme = computed(() =>
-    candidates.value.reduce((s, r) => s + r.system_count, 0)
+    props.national_results.reduce((s, r) => s + r.system_count, 0)
 )
 const totalPv = computed(() =>
-    candidates.value.reduce((s, r) => s + r.pv_count, 0)
+    props.national_results.reduce((s, r) => s + r.pv_count, 0)
 )
 const totalEcart = computed(() => totalPv.value - totalSysteme.value)
+const totalProcurationCandidats = computed(() =>
+    props.national_results.reduce((s, r) => s + r.procuration, 0)
+)
 
 const totalBureaux = computed(() =>
     Object.values(props.status_breakdown).reduce((s, n) => s + n, 0)
@@ -77,7 +81,7 @@ const totalBureaux = computed(() =>
         </div>
 
         <!-- Stat cards -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div class="text-3xl font-bold text-gray-900">{{ stats.total_bureaux }}</div>
                 <div class="text-xs text-gray-500 mt-1">Bureaux total</div>
@@ -98,6 +102,10 @@ const totalBureaux = computed(() =>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div class="text-3xl font-bold text-purple-600">{{ stats.admin_pv_bureaux }}</div>
                 <div class="text-xs text-gray-500 mt-1">Saisies admin</div>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                <div class="text-3xl font-bold text-purple-600">{{ stats.total_procuration.toLocaleString('fr-FR') }}</div>
+                <div class="text-xs text-gray-500 mt-1">Votes par procuration</div>
             </div>
         </div>
 
@@ -126,6 +134,9 @@ const totalBureaux = computed(() =>
                                     Syst.
                                 </th>
                                 <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
+                                    Procuration
+                                </th>
+                                <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
                                     PV papier
                                 </th>
                                 <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
@@ -142,6 +153,10 @@ const totalBureaux = computed(() =>
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-gray-400 text-xs">
                                     {{ result.system_count.toLocaleString('fr-FR') }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono text-xs"
+                                    :class="result.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
+                                    {{ result.procuration > 0 ? result.procuration.toLocaleString('fr-FR') : '—' }}
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
                                     {{ result.pv_count.toLocaleString('fr-FR') }}
@@ -163,6 +178,10 @@ const totalBureaux = computed(() =>
                                 <td class="px-3 py-2.5 text-right font-mono text-gray-400 text-xs">
                                     {{ result.system_count.toLocaleString('fr-FR') }}
                                 </td>
+                                <td class="px-3 py-2.5 text-right font-mono text-xs"
+                                    :class="result.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
+                                    {{ result.procuration > 0 ? result.procuration.toLocaleString('fr-FR') : '—' }}
+                                </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-gray-600">
                                     {{ result.pv_count.toLocaleString('fr-FR') }}
                                 </td>
@@ -183,6 +202,9 @@ const totalBureaux = computed(() =>
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-400">
                                     {{ totalSysteme.toLocaleString('fr-FR') }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold text-purple-600">
+                                    {{ totalProcurationCandidats.toLocaleString('fr-FR') }}
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold text-gray-700">
                                     {{ totalPv.toLocaleString('fr-FR') }}

@@ -36,16 +36,21 @@ class CountingController extends Controller
             $bureau->update(['status' => 'counting']);
         }
 
-        // Compteurs en temps réel
+        // Compteurs en temps réel (inclut les votes normaux + procurations via quantity)
         $options = VoteOption::orderBy('ordre_affichage')->get()->map(function ($opt) use ($bureau) {
             $plus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $opt->id)
                 ->where('action', '+1')
-                ->count();
+                ->sum('quantity');
             $minus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $opt->id)
                 ->where('action', '-1')
-                ->count();
+                ->sum('quantity');
+
+            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
+                ->where('vote_option_id', $opt->id)
+                ->where('is_procuration', true)
+                ->sum('quantity');
 
             return [
                 'id'              => $opt->id,
@@ -54,6 +59,7 @@ class CountingController extends Controller
                 'photo'           => $opt->photo,
                 'ordre_affichage' => $opt->ordre_affichage,
                 'count'           => $plus - $minus,
+                'procuration'     => $procuration,
             ];
         });
 
@@ -87,25 +93,22 @@ class CountingController extends Controller
             return back()->with('error', 'Le bureau n\'est plus en phase de comptage');
         }
 
-        // Anti-double-clic : clé unique par user+option
         $lockKey = "vote_lock_{$user->id}_{$validated['vote_option_id']}";
         if (Cache::has($lockKey)) {
             return response()->json(['error' => 'Clic trop rapide'], 429);
         }
-        Cache::put($lockKey, true, 0.5); // 500ms
+        Cache::put($lockKey, true, 0.5);
 
-        // Transaction + insertion atomique
         DB::transaction(function () use ($validated, $bureau, $user) {
-            // Vérification -1 : ne pas aller en négatif
             if ($validated['action'] === '-1') {
                 $plus = VoteLog::where('bureau_vote_id', $bureau->id)
                     ->where('vote_option_id', $validated['vote_option_id'])
                     ->where('action', '+1')
-                    ->count();
+                    ->sum('quantity');
                 $minus = VoteLog::where('bureau_vote_id', $bureau->id)
                     ->where('vote_option_id', $validated['vote_option_id'])
                     ->where('action', '-1')
-                    ->count();
+                    ->sum('quantity');
                 if ($minus >= $plus) {
                     throw new \Exception('Impossible : le compteur ne peut pas être négatif');
                 }
@@ -116,23 +119,71 @@ class CountingController extends Controller
                 'vote_option_id' => $validated['vote_option_id'],
                 'user_id' => $user->id,
                 'action' => $validated['action'],
+                'quantity' => 1,
+                'is_procuration' => false,
                 'created_at' => now(),
             ]);
         });
 
-        // Retourner le compteur mis à jour
-        $plus = VoteLog::where('bureau_vote_id', $bureau->id)
-            ->where('vote_option_id', $validated['vote_option_id'])
-            ->where('action', '+1')
-            ->count();
-        $minus = VoteLog::where('bureau_vote_id', $bureau->id)
-            ->where('vote_option_id', $validated['vote_option_id'])
-            ->where('action', '-1')
-            ->count();
+        return response()->json([
+            'success' => true,
+            'count' => $this->currentCount($bureau->id, $validated['vote_option_id']),
+        ]);
+    }
+
+    /**
+     * Saisie manuelle des votes par procuration.
+     */
+    public function voteManuel(Request $request)
+    {
+        $validated = $request->validate([
+            'vote_option_id' => 'required|exists:vote_options,id',
+            'quantity'       => 'required|integer|min:1|max:9999',
+        ]);
+
+        $user = auth()->user();
+        $bureau = $user->bureauVote;
+
+        if (!$bureau) {
+            return response()->json(['error' => 'Aucun bureau assigné'], 403);
+        }
+
+        if (!in_array($bureau->status, ['pending', 'counting'])) {
+            return response()->json(['error' => 'Le bureau n\'est plus en phase de comptage'], 403);
+        }
+
+        DB::transaction(function () use ($validated, $bureau, $user) {
+            VoteLog::create([
+                'bureau_vote_id' => $bureau->id,
+                'vote_option_id' => $validated['vote_option_id'],
+                'user_id'        => $user->id,
+                'action'         => '+1',
+                'quantity'       => $validated['quantity'],
+                'is_procuration' => true,
+                'created_at'     => now(),
+            ]);
+        });
 
         return response()->json([
             'success' => true,
-            'count' => $plus - $minus,
+            'count' => $this->currentCount($bureau->id, $validated['vote_option_id']),
         ]);
+    }
+
+    /**
+     * Calcule le compteur courant (votes normaux + procurations) pour une option.
+     */
+    private function currentCount(int $bureauId, int $voteOptionId): int
+    {
+        $plus = VoteLog::where('bureau_vote_id', $bureauId)
+            ->where('vote_option_id', $voteOptionId)
+            ->where('action', '+1')
+            ->sum('quantity');
+        $minus = VoteLog::where('bureau_vote_id', $bureauId)
+            ->where('vote_option_id', $voteOptionId)
+            ->where('action', '-1')
+            ->sum('quantity');
+
+        return $plus - $minus;
     }
 }

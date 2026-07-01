@@ -1,7 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
 
 const props = defineProps({
     logs:     Object,
@@ -19,6 +18,9 @@ const filterUser = (id) => {
 const filterAction = (action) => {
     router.get('/admin/audit', { ...props.filters, action: action || undefined }, { preserveState: true })
 }
+const filterProcuration = (value) => {
+    router.get('/admin/audit', { ...props.filters, procuration: value || undefined }, { preserveState: true })
+}
 </script>
 
 <template>
@@ -28,7 +30,7 @@ const filterAction = (action) => {
         </template>
 
         <!-- Filtres -->
-        <div class="bg-white rounded-xl border border-gray-100 p-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl border border-gray-100 p-4 mb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
             <select @change="filterBureau($event.target.value)"
                     class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="">Tous les bureaux</option>
@@ -45,6 +47,12 @@ const filterAction = (action) => {
                 <option value="+1">+1</option>
                 <option value="-1">-1</option>
             </select>
+            <select @change="filterProcuration($event.target.value)"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <option value="">Tout (procuration ou non)</option>
+                <option value="1">Procuration uniquement</option>
+                <option value="0">Hors procuration</option>
+            </select>
             <Link :href="`/admin/audit`"
                   class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium text-center">
                 Réinitialiser
@@ -60,14 +68,17 @@ const filterAction = (action) => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Bureau</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Candidat</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Action</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Quantité</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Type</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Utilisateur</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="logs.data.length === 0">
-                        <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">Aucun log</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">Aucun log</td>
                     </tr>
-                    <tr v-for="log in logs.data" :key="log.id" class="hover:bg-gray-50">
+                    <tr v-for="log in logs.data" :key="log.id"
+                        :class="log.is_procuration ? 'bg-purple-50/50 hover:bg-purple-50' : 'hover:bg-gray-50'">
                         <td class="px-4 py-3 text-sm font-mono text-gray-600">{{ log.created_at }}</td>
                         <td class="px-4 py-3 text-sm text-gray-700">
                             <span v-if="log.bureau" class="font-mono text-xs">{{ log.bureau.code }}</span>
@@ -79,6 +90,16 @@ const filterAction = (action) => {
                                   class="text-xs font-bold px-2.5 py-1 rounded-full">
                                 {{ log.action }}
                             </span>
+                        </td>
+                        <td class="px-4 py-3 text-center text-sm font-semibold text-gray-800">
+                            {{ log.quantity }}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span v-if="log.is_procuration"
+                                  class="bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                                Procuration
+                            </span>
+                            <span v-else class="text-xs text-gray-400">—</span>
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-700">{{ log.user }}</td>
                     </tr>
