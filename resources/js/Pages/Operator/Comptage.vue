@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import axios from 'axios'
-import { reactive } from 'vue'
+import { reactive, ref, computed } from 'vue'
 
 const props = defineProps({
     bureau:     Object,
@@ -35,6 +35,17 @@ const disableButton = (id) => {
 // ── Photo ────────────────────────────────────────────────────────────────
 const getPhotoUrl = (c) => c.photo ? `/storage/${c.photo}` : null
 const onImgError = (e) => { e.target.src = '/images/candidat-placeholder.png' }
+
+// ── Recherche / filtre ──────────────────────────────────────────────────────
+const search = ref('')
+const filteredCandidates = computed(() => {
+    if (!search.value.trim()) return props.candidates
+    const q = search.value.trim().toLowerCase()
+    return props.candidates.filter(c =>
+        c.nom.toLowerCase().includes(q) ||
+        String(c.ordre_affichage ?? c.id).includes(q)
+    )
+})
 
 // ── Vote +1 / -1 classique ─────────────────────────────────────────────────
 const vote = async (optionId, action) => {
@@ -75,47 +86,63 @@ const vote = async (optionId, action) => {
     }
 }
 
-// ── Saisie manuelle (procuration) ───────────────────────────────────────────
-const procurationInputs = reactive({})
-const procurationLoading = reactive({})
-const procurationErrors = reactive({})
+// ── Modale procuration (unique, partagée par toutes les cartes) ─────────────
+const procurationModal = reactive({
+    open: false,
+    id: null,
+    nom: '',
+    quantity: null,
+    loading: false,
+    error: null,
+})
 
-const submitProcuration = async (optionId) => {
-    const qty = procurationInputs[optionId]
+const openProcurationModal = (c) => {
+    procurationModal.open = true
+    procurationModal.id = c.id
+    procurationModal.nom = c.nom
+    procurationModal.quantity = null
+    procurationModal.error = null
+}
+
+const closeProcurationModal = () => {
+    procurationModal.open = false
+}
+
+const submitProcuration = async () => {
+    const qty = procurationModal.quantity
 
     if (!qty || qty < 1) {
-        procurationErrors[optionId] = 'Entrez un nombre valide'
+        procurationModal.error = 'Entrez un nombre valide'
         return
     }
 
-    if (procurationLoading[optionId]) return
-    procurationLoading[optionId] = true
-    procurationErrors[optionId] = null
+    procurationModal.loading = true
+    procurationModal.error = null
 
     try {
         const res = await axios.post('/operator/comptage/vote-manuel', {
-            vote_option_id: optionId,
+            vote_option_id: procurationModal.id,
             quantity: qty,
         })
 
         if (res.data.success) {
-            counts[optionId] = res.data.count
-            triggerAnimation(optionId)
-            procurationInputs[optionId] = null
+            counts[procurationModal.id] = res.data.count
+            triggerAnimation(procurationModal.id)
+            closeProcurationModal()
         }
     } catch (e) {
         if (e.response?.status === 422) {
-            procurationErrors[optionId] = e.response.data.errors?.quantity?.[0]
+            procurationModal.error = e.response.data.errors?.quantity?.[0]
                 || e.response.data.message
                 || 'Valeur invalide'
         } else if (e.response?.status === 403) {
-            alert(e.response.data.error || 'Ce bureau est verrouillé.')
+            procurationModal.error = e.response.data.error || 'Ce bureau est verrouillé.'
         } else {
-            procurationErrors[optionId] = 'Erreur lors de l\'enregistrement'
+            procurationModal.error = 'Erreur lors de l\'enregistrement'
             console.error(e)
         }
     } finally {
-        procurationLoading[optionId] = false
+        procurationModal.loading = false
     }
 }
 </script>
@@ -142,92 +169,91 @@ const submitProcuration = async (optionId) => {
 
             <!-- ── Candidats ────────────────────────────────────────── -->
             <div class="mb-6">
-                <h2 class="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">
-                    Candidats <span class="text-gray-400 normal-case">({{ candidates.length }})</span>
-                </h2>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Candidats <span class="text-gray-400 normal-case">({{ filteredCandidates.length }}/{{ candidates.length }})</span>
+                    </h2>
+                    <div class="relative w-full max-w-xs">
+                        <input
+                            v-model="search"
+                            type="text"
+                            placeholder="Rechercher un candidat..."
+                            class="w-full text-sm pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg
+                                   focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div v-if="filteredCandidates.length === 0" class="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">
+                    Aucun candidat ne correspond à "{{ search }}"
+                </div>
+
+                <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     <div
-                        v-for="c in candidates" :key="c.id"
-                        class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex flex-col items-center"
+                        v-for="c in filteredCandidates" :key="c.id"
+                        class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col"
                     >
-                        <!-- Photo + badge numéro superposé -->
-                        <div class="relative mb-2">
+                        <!-- Photo carrée dominante + badge numéro superposé -->
+                        <div class="relative w-full aspect-square bg-gray-100">
                             <img
                                 :src="getPhotoUrl(c) || '/images/candidat-placeholder.png'"
                                 @error="onImgError"
                                 :alt="c.nom"
-                                class="w-16 h-16 rounded-full object-cover border border-gray-200"
+                                class="w-full h-full object-cover"
                             />
-                            <span class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white">
+                            <span class="absolute top-1.5 left-1.5 min-w-[24px] h-6 px-1.5 rounded-md bg-blue-600 text-white text-xs font-bold flex items-center justify-center shadow">
                                 {{ c.ordre_affichage ?? c.id }}
                             </span>
                         </div>
 
-                        <!-- Nom -->
-                        <div class="text-xs font-semibold text-gray-900 text-center leading-tight mb-2 line-clamp-2 h-8">
-                            {{ c.nom }}
-                        </div>
+                        <div class="p-2 flex flex-col items-center">
+                            <!-- Nom -->
+                            <div class="text-xs font-semibold text-gray-900 text-center leading-tight mb-1.5 line-clamp-2 h-8">
+                                {{ c.nom }}
+                            </div>
 
-                        <!-- Compteur -->
-                        <div
-                            class="text-2xl font-black text-blue-600 tabular-nums transition-transform duration-150 mb-2"
-                            :class="{ 'scale-110': animating[c.id] }"
-                        >
-                            {{ counts[c.id] }}
-                        </div>
-
-                        <!-- Boutons +1 / -1 -->
-                        <div class="flex gap-1.5 w-full mb-2">
-                            <button
-                                @click="vote(c.id, '+1')"
-                                :disabled="disabledButtons[c.id]"
-                                class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
-                                       disabled:opacity-50 disabled:cursor-not-allowed
-                                       text-white font-bold py-2 rounded-lg text-sm
-                                       transition-all duration-100 select-none"
+                            <!-- Compteur -->
+                            <div
+                                class="text-xl font-black text-blue-600 tabular-nums transition-transform duration-150 mb-1.5"
+                                :class="{ 'scale-110': animating[c.id] }"
                             >
-                                +1
-                            </button>
-                            <button
-                                @click="vote(c.id, '-1')"
-                                :disabled="disabledButtons[c.id] || counts[c.id] === 0"
-                                class="flex-1 bg-red-500 hover:bg-red-600 active:scale-95
-                                       disabled:opacity-50 disabled:cursor-not-allowed
-                                       text-white font-bold py-2 rounded-lg text-sm
-                                       transition-all duration-100 select-none"
-                            >
-                                −1
-                            </button>
-                        </div>
+                                {{ counts[c.id] }}
+                            </div>
 
-                        <!-- ── Saisie manuelle / Procuration ────────────────── -->
-                        <div class="w-full pt-2 border-t border-gray-100">
-                            <div class="flex gap-1.5">
-                                <input
-                                    v-model.number="procurationInputs[c.id]"
-                                    type="number"
-                                    min="1"
-                                    placeholder="Nb"
-                                    class="w-full min-w-0 text-xs px-2 py-1.5 border border-gray-300 rounded-lg
-                                           focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                />
+                            <!-- Boutons +1 / -1 -->
+                            <div class="flex gap-1 w-full mb-1">
                                 <button
-                                    @click="submitProcuration(c.id)"
-                                    :disabled="procurationLoading[c.id] || !procurationInputs[c.id]"
-                                    class="bg-purple-600 hover:bg-purple-700 active:scale-95
-                                           disabled:opacity-50 disabled:cursor-not-allowed
-                                           text-white text-xs font-bold px-2.5 py-1.5 rounded-lg
-                                           whitespace-nowrap transition-all duration-100 select-none"
+                                    @click="vote(c.id, '-1')"
+                                    :disabled="disabledButtons[c.id] || counts[c.id] === 0"
+                                    class="flex-1 bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
+                                           disabled:opacity-40 disabled:cursor-not-allowed
+                                           font-bold py-1.5 rounded-md text-sm leading-none
+                                           transition-all duration-100 select-none"
                                 >
-                                    Valider
+                                    −
+                                </button>
+                                <button
+                                    @click="vote(c.id, '+1')"
+                                    :disabled="disabledButtons[c.id]"
+                                    class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
+                                           disabled:opacity-50 disabled:cursor-not-allowed
+                                           text-white font-bold py-1.5 rounded-md text-sm leading-none
+                                           transition-all duration-100 select-none"
+                                >
+                                    +
                                 </button>
                             </div>
-                            <p v-if="procurationErrors[c.id]" class="text-[10px] text-red-600 mt-1">
-                                {{ procurationErrors[c.id] }}
-                            </p>
-                            <p class="text-[10px] text-gray-400 mt-1 leading-tight">
-                                Saisie manuelle réservée aux votes par procuration
-                            </p>
+
+                            <!-- Lien procuration discret -->
+                            <button
+                                @click="openProcurationModal(c)"
+                                class="text-[10px] text-purple-500 hover:text-purple-700 hover:underline font-medium"
+                            >
+                                + Procuration
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -274,41 +300,76 @@ const submitProcuration = async (optionId) => {
                                 −1
                             </button>
                         </div>
-
-                        <!-- ── Saisie manuelle / Procuration ────────────────── -->
-                        <div class="pt-3 border-t border-gray-100">
-                            <div class="flex gap-2">
-                                <input
-                                    v-model.number="procurationInputs[c.id]"
-                                    type="number"
-                                    min="1"
-                                    placeholder="Nombre de votes"
-                                    class="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg
-                                           focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                />
-                                <button
-                                    @click="submitProcuration(c.id)"
-                                    :disabled="procurationLoading[c.id] || !procurationInputs[c.id]"
-                                    class="bg-purple-600 hover:bg-purple-700 active:scale-95
-                                           disabled:opacity-50 disabled:cursor-not-allowed
-                                           text-white text-sm font-bold px-4 py-2 rounded-lg
-                                           whitespace-nowrap transition-all duration-100 select-none"
-                                >
-                                    Valider
-                                </button>
-                            </div>
-                            <p v-if="procurationErrors[c.id]" class="text-xs text-red-600 mt-1">
-                                {{ procurationErrors[c.id] }}
-                            </p>
-                            <p class="text-xs text-gray-400 mt-1">
-                                Saisie manuelle réservée aux votes par procuration
-                            </p>
-                        </div>
+                        <button
+                            @click="openProcurationModal(c)"
+                            class="text-xs text-purple-600 hover:text-purple-800 hover:underline font-medium"
+                        >
+                            + Ajouter des votes par procuration
+                        </button>
                     </div>
                 </div>
             </div>
 
         </template>
+
+        <!-- ══ Modale Procuration ══════════════════════════════════════ -->
+        <Teleport to="body">
+            <div v-if="procurationModal.open"
+                 @click.self="closeProcurationModal"
+                 class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-base font-bold text-gray-900">Vote par procuration</h3>
+                        <button @click="closeProcurationModal" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">{{ procurationModal.nom }}</p>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de votes</label>
+                    <input
+                        v-model.number="procurationModal.quantity"
+                        type="number"
+                        min="1"
+                        autofocus
+                        placeholder="Ex: 12"
+                        @keyup.enter="submitProcuration"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-lg font-semibold
+                               focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <p v-if="procurationModal.error" class="text-sm text-red-600 mt-1.5">
+                        {{ procurationModal.error }}
+                    </p>
+
+                    <div class="bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mt-3">
+                        <p class="text-xs text-purple-700 leading-snug">
+                            Ce champ est réservé à la saisie manuelle des votes par procuration. Il sera enregistré séparément et tracé dans le journal d'audit.
+                        </p>
+                    </div>
+
+                    <div class="flex gap-2 mt-5">
+                        <button
+                            @click="submitProcuration"
+                            :disabled="procurationModal.loading || !procurationModal.quantity"
+                            class="flex-1 bg-purple-600 hover:bg-purple-700 active:scale-95
+                                   disabled:opacity-50 disabled:cursor-not-allowed
+                                   text-white font-bold py-2.5 rounded-lg text-sm
+                                   transition-all duration-100"
+                        >
+                            {{ procurationModal.loading ? 'Enregistrement...' : 'Valider' }}
+                        </button>
+                        <button
+                            @click="closeProcurationModal"
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg text-sm"
+                        >
+                            Annuler
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>
 
