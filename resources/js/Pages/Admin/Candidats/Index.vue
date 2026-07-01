@@ -11,6 +11,15 @@ const deleteCandidate = (id, name) => {
         router.delete(`/admin/candidats/${id}`)
     }
 }
+
+const getPhotoUrl = (c) => {
+    return c.photo ? `/storage/${c.photo}` : null
+}
+
+// si l'image ne charge pas (fichier supprimé/corrompu), on bascule sur le placeholder
+const onImgError = (e) => {
+    e.target.src = '/images/candidat-placeholder.png'
+}
 </script>
 
 <template>
@@ -30,6 +39,7 @@ const deleteCandidate = (id, name) => {
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">N°</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photo</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes enregistrés</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
@@ -37,7 +47,7 @@ const deleteCandidate = (id, name) => {
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="candidates.length === 0">
-                        <td colspan="4" class="px-4 py-8 text-center text-sm text-gray-400">
+                        <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">
                             Aucun candidat créé
                         </td>
                     </tr>
@@ -46,6 +56,14 @@ const deleteCandidate = (id, name) => {
                             <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
                                 {{ c.ordre_affichage }}
                             </span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <img
+                                :src="getPhotoUrl(c) || '/images/candidat-placeholder.png'"
+                                @error="onImgError"
+                                :alt="c.nom"
+                                class="w-10 h-10 rounded-full object-cover border border-gray-200 mx-auto"
+                            />
                         </td>
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ c.nom }}</td>
                         <td class="px-4 py-3 text-center">

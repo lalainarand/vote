@@ -48,10 +48,12 @@ class CountingController extends Controller
                 ->count();
 
             return [
-                'id' => $opt->id,
-                'nom' => $opt->nom,
-                'type' => $opt->type,
-                'count' => $plus - $minus,
+                'id'              => $opt->id,
+                'nom'             => $opt->nom,
+                'type'            => $opt->type,
+                'photo'           => $opt->photo,
+                'ordre_affichage' => $opt->ordre_affichage,
+                'count'           => $plus - $minus,
             ];
         });
 

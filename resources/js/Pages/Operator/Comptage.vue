@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import axios from 'axios'
-import { ref, reactive } from 'vue'
+import { reactive } from 'vue'
 
 const props = defineProps({
     bureau:     Object,
@@ -25,28 +25,24 @@ const triggerAnimation = (id) => {
     setTimeout(() => { animating[id] = false }, 300)
 }
 
-// ── Anti double-clic : état réactif par bouton ────────────────────────────
-// ✅ CORRIGÉ : on utilise un reactive object au lieu d'une fonction
+// ── Anti double-clic ───────────────────────────────────────────────────────
 const disabledButtons = reactive({})
-
 const disableButton = (id) => {
     disabledButtons[id] = true
-    setTimeout(() => {
-        disabledButtons[id] = false
-    }, 900) // 500ms de debounce
+    setTimeout(() => { disabledButtons[id] = false }, 900)
 }
+
+// ── Photo ────────────────────────────────────────────────────────────────
+const getPhotoUrl = (c) => c.photo ? `/storage/${c.photo}` : null
+const onImgError = (e) => { e.target.src = '/images/candidat-placeholder.png' }
 
 // ── Appel via axios (CSRF automatique) ────────────────────────────────────
 const vote = async (optionId, action) => {
-    // Vérifier si le bouton est déjà désactivé
     if (disabledButtons[optionId]) return
-
-    // Désactiver immédiatement (anti double-clic)
     disableButton(optionId)
 
     const delta = action === '+1' ? 1 : -1
 
-    // Optimistic UI
     if (counts[optionId] + delta < 0) return
     counts[optionId] += delta
     triggerAnimation(optionId)
@@ -61,7 +57,6 @@ const vote = async (optionId, action) => {
             counts[optionId] = res.data.count
         }
     } catch (e) {
-        // Rollback
         counts[optionId] -= delta
 
         if (e.response) {
@@ -104,54 +99,47 @@ const vote = async (optionId, action) => {
             <!-- ── Candidats ────────────────────────────────────────── -->
             <div class="mb-6">
                 <h2 class="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">
-                    Candidats
+                    Candidats <span class="text-gray-400 normal-case">({{ candidates.length }})</span>
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     <div
                         v-for="c in candidates" :key="c.id"
-                        class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm"
+                        class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex flex-col items-center"
                     >
-                        <!-- ✅ NOUVEAU AFFICHAGE : Numéro bien visible + Nom en valeur -->
-                        <div class="flex items-center gap-4 mb-5">
-                            <!-- Badge numéro -->
-                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
-                                <span class="text-3xl font-black text-white">
-                                    {{ c.ordre_affichage ?? c.id }}
-                                </span>
-                            </div>
-                            
-                            <!-- Nom du candidat -->
-                            <div class="flex-1 min-w-0">
-                                <div class="text-lg font-bold text-gray-900 leading-tight truncate">
-                                    {{ c.nom }}
-                                </div>
-                                <div class="text-xs text-gray-500 mt-0.5">
-                                    Candidat
-                                </div>
-                            </div>
+                        <!-- Photo + badge numéro superposé -->
+                        <div class="relative mb-2">
+                            <img
+                                :src="getPhotoUrl(c) || '/images/candidat-placeholder.png'"
+                                @error="onImgError"
+                                :alt="c.nom"
+                                class="w-16 h-16 rounded-full object-cover border border-gray-200"
+                            />
+                            <span class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white">
+                                {{ c.ordre_affichage ?? c.id }}
+                            </span>
                         </div>
 
-                        <!-- Compteur bien visible -->
-                        <div class="text-center mb-5">
-                            <div
-                                class="inline-block text-6xl font-black text-blue-600 tabular-nums transition-transform duration-150"
-                                :class="{ 'scale-110': animating[c.id] }"
-                            >
-                                {{ counts[c.id] }}
-                            </div>
-                            <div class="text-xs text-gray-400 mt-1 uppercase tracking-wide">
-                                Votes
-                            </div>
+                        <!-- Nom -->
+                        <div class="text-xs font-semibold text-gray-900 text-center leading-tight mb-2 line-clamp-2 h-8">
+                            {{ c.nom }}
+                        </div>
+
+                        <!-- Compteur -->
+                        <div
+                            class="text-2xl font-black text-blue-600 tabular-nums transition-transform duration-150 mb-2"
+                            :class="{ 'scale-110': animating[c.id] }"
+                        >
+                            {{ counts[c.id] }}
                         </div>
 
                         <!-- Boutons +1 / -1 -->
-                        <div class="flex gap-2">
+                        <div class="flex gap-1.5 w-full">
                             <button
                                 @click="vote(c.id, '+1')"
                                 :disabled="disabledButtons[c.id]"
                                 class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
                                        disabled:opacity-50 disabled:cursor-not-allowed
-                                       text-white font-bold py-4 rounded-xl text-xl
+                                       text-white font-bold py-2 rounded-lg text-sm
                                        transition-all duration-100 select-none"
                             >
                                 +1
@@ -161,7 +149,7 @@ const vote = async (optionId, action) => {
                                 :disabled="disabledButtons[c.id] || counts[c.id] === 0"
                                 class="flex-1 bg-red-500 hover:bg-red-600 active:scale-95
                                        disabled:opacity-50 disabled:cursor-not-allowed
-                                       text-white font-bold py-4 rounded-xl text-xl
+                                       text-white font-bold py-2 rounded-lg text-sm
                                        transition-all duration-100 select-none"
                             >
                                 −1
@@ -219,3 +207,12 @@ const vote = async (optionId, action) => {
         </template>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+</style>

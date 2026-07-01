@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\VoteOption;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class CandidateController extends Controller
@@ -35,9 +36,15 @@ class CandidateController extends Controller
         $validated = $request->validate([
             'nom'             => 'required|string|max:255',
             'ordre_affichage' => 'required|integer|min:1',
+            'photo'           => 'nullable|image|mimes:jpg,jpeg,png,webp',
         ]);
 
         $validated['type'] = 'candidat';
+
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('candidats', 'public');
+            $validated['photo'] = $path;
+        }
 
         VoteOption::create($validated);
 
@@ -59,20 +66,25 @@ class CandidateController extends Controller
 
     public function update(Request $request, VoteOption $candidat)
     {
-        if ($candidat->type !== 'candidat') {
-            abort(404);
-        }
-
         $validated = $request->validate([
             'nom'             => 'required|string|max:255',
             'ordre_affichage' => 'required|integer|min:1',
+            'photo'           => 'nullable|image|mimes:jpg,jpeg,png,webp',
         ]);
+
+        if ($request->hasFile('photo')) {
+            // supprimer l'ancienne photo si elle existe
+            if ($candidat->photo) {
+                Storage::disk('public')->delete($candidat->photo);
+            }
+            $validated['photo'] = $request->file('photo')->store('candidats', 'public');
+        }
 
         $candidat->update($validated);
 
         return redirect()
             ->route('admin.candidats.index')
-            ->with('success', 'Candidat mis à jour');
+            ->with('success', 'Candidat mis à jour avec succès');
     }
 
     public function destroy(VoteOption $candidat)
