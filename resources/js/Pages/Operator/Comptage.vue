@@ -1,8 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import GeometricVotes from '@/Components/GeometricVotes.vue' // 🆕 Import du composant
+import GeometricVotes from '@/Components/GeometricVotes.vue' 
+import { reactive, ref, computed, onUnmounted } from 'vue'
+
 import axios from 'axios'
-import { reactive, ref, computed } from 'vue'
 
 const props = defineProps({
     bureau:         Object,
@@ -15,7 +16,7 @@ const props = defineProps({
     },
 })
 
-const showModal = ref(false) // 🆕 Pour contrôler l'affichage du modal
+const showModal = ref(false) 
 
 // ── Compteurs locaux réactifs ────────────────────────────────────────────
 const counts = reactive(
@@ -269,6 +270,168 @@ const submitBulletinManuel = async () => {
 const handleKeydown = (e) => {
     if (e.key === 'Escape') showModal.value = false
 }
+
+// ... (vos props existantes)
+
+// 📷 NOUVELLES RÉFS POUR LA CAMÉRA
+const fileInput = ref(null)
+const showCameraModal = ref(false)
+const videoElement = ref(null)
+const canvasElement = ref(null)
+const selectedImage = ref(null)
+const isCapturing = ref(false)
+const isUploading = ref(false)
+let mediaStream = null
+
+// 📷 OUVRIR LA CAMÉRA
+const openCamera = async () => {
+    try {
+        showCameraModal.value = true
+        isCapturing.value = false
+        
+        // Attendre que le modal soit rendu
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Demander l'accès à la caméra
+        mediaStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'environment', // Caméra arrière sur mobile
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            }, 
+            audio: false 
+        })
+        
+        if (videoElement.value) {
+            videoElement.value.srcObject = mediaStream
+        }
+    } catch (error) {
+        console.error('Erreur accès caméra:', error)
+        
+        if (error.name === 'NotAllowedError') {
+            alert('Permission refusée. Veuillez autoriser l\'accès à la caméra dans les paramètres de votre navigateur.')
+        } else if (error.name === 'NotFoundError') {
+            alert('Aucune caméra détectée sur cet appareil.')
+        } else if (error.name === 'NotReadableError') {
+            alert('La caméra est déjà utilisée par une autre application.')
+        } else {
+            alert('Impossible d\'accéder à la caméra. Vérifiez que vous utilisez HTTPS (ou localhost).')
+        }
+        
+        showCameraModal.value = false
+    }
+}
+
+//  CAPTURER LA PHOTO
+const capturePhoto = async () => {
+    if (!videoElement.value || !canvasElement.value) return
+    
+    isCapturing.value = true
+    
+    const video = videoElement.value
+    const canvas = canvasElement.value
+    
+    // Ajuster la taille du canvas à celle de la vidéo
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    
+    // Dessiner la frame actuelle sur le canvas
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0)
+    
+    // Convertir en blob
+    canvas.toBlob(async (blob) => {
+        // Créer un fichier
+        const file = new File([blob], `bulletin_${Date.now()}.jpg`, { 
+            type: 'image/jpeg',
+            lastModified: Date.now()
+        })
+        
+        // Traiter le fichier
+        await processCapturedFile(file)
+        
+        isCapturing.value = false
+    }, 'image/jpeg', 0.85) // Qualité 85%
+}
+
+// 📷 TRAITER LE FICHIER CAPTURÉ
+const processCapturedFile = async (file) => {
+    // Validation
+    if (file.size > 10 * 1024 * 1024) { // 10MB max
+        alert('L\'image est trop volumineuse (max 10 Mo).')
+        return
+    }
+    
+    // Créer un aperçu
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        selectedImage.value = e.target.result
+    }
+    reader.readAsDataURL(file)
+    
+    // Fermer la caméra
+    closeCamera()
+    
+    // Préparer l'envoi
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('bureau_vote_id', props.bureau.id)
+    
+    isUploading.value = true
+    
+    try {
+        const res = await axios.post('/operator/comptage/upload-bulletin-image', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        
+        if (res.data.success) {
+            // Optionnel : incrémente automatiquement le compteur
+            // await voteBulletin('+1')
+            
+            console.log('Photo enregistrée avec succès')
+        }
+    } catch (error) {
+        console.error('Erreur upload:', error)
+        
+        if (error.response?.status === 422) {
+            alert('Format d\'image invalide. Utilisez JPG, PNG ou WEBP.')
+        } else if (error.response?.status === 413) {
+            alert('Fichier trop volumineux.')
+        } else {
+            alert('Erreur lors de l\'enregistrement de l\'image.')
+        }
+        
+        selectedImage.value = null
+    } finally {
+        isUploading.value = false
+    }
+}
+
+// 📷 FERMER LA CAMÉRA
+const closeCamera = () => {
+    if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop())
+        mediaStream = null
+    }
+    showCameraModal.value = false
+    isCapturing.value = false
+}
+
+// Upload classique (fallback)
+const handleFileUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+    
+    await processCapturedFile(file)
+    event.target.value = '' // Reset
+}
+
+// Nettoyer au démontage
+onUnmounted(() => {
+    closeCamera()
+})
+
+
 </script>
 
 <template>
@@ -304,50 +467,132 @@ const handleKeydown = (e) => {
         <template v-else>
 
             <!-- ── Compteur de bulletins dépouillés ────────────────────── -->
-            <div class="mb-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div class="flex items-center justify-between flex-wrap gap-4">
-                    <div>
-                        <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                            Bulletins dépouillés
-                        </h2>
-                        <p class="text-[11px] text-gray-400 max-w-xs">
-                            1 bulletin peut contenir de 1 à 9 votes candidats. Ce compteur est indépendant des compteurs candidats.
-                        </p>
-                    </div>
+<div class="mb-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <!-- Input caché pour l'upload fichier -->
+    <input 
+        type="file" 
+        accept="image/*" 
+        capture="environment" 
+        ref="fileInput" 
+        @change="handleFileUpload" 
+        class="hidden" 
+    />
 
-                    <div class="flex items-center gap-4">
-                        <div
-                            class="text-4xl font-black text-amber-600 tabular-nums transition-transform duration-150"
-                            :class="{ 'scale-110': bulletinAnimating }"
-                        >
-                            {{ bulletinCount }}
-                        </div>
+    <div class="flex items-center justify-between flex-wrap gap-4">
+        <div>
+            <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Bulletins dépouillés
+            </h2>
+            <p class="text-[11px] text-gray-400 max-w-xs">
+                1 bulletin peut contenir de 1 à 9 votes candidats. Ce compteur est indépendant des compteurs candidats.
+            </p>
+            
+            <!-- Aperçu de la dernière photo -->
+            <div v-if="selectedImage" class="mt-2 flex items-center gap-2">
+                <img :src="selectedImage" class="w-10 h-10 object-cover rounded border border-gray-200" alt="Dernier bulletin" />
+                <span class="text-[10px] text-green-600 font-medium">Photo enregistrée</span>
+            </div>
+        </div>
 
-                        <div class="flex gap-2">
-                            <button
-                                @click="voteBulletin('-1')"
-                                :disabled="bulletinDisabled || bulletinCount === 0"
-                                class="bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
-                                       disabled:opacity-40 disabled:cursor-not-allowed
-                                       font-bold w-11 h-11 rounded-xl text-lg leading-none
-                                       transition-all duration-100 select-none"
-                            >
-                                −
-                            </button>
-                            <button
-                                @click="voteBulletin('+1')"
-                                :disabled="bulletinDisabled"
-                                class="bg-amber-500 hover:bg-amber-600 active:scale-95
-                                       disabled:opacity-50 disabled:cursor-not-allowed
-                                       text-white font-bold w-11 h-11 rounded-xl text-lg leading-none
-                                       transition-all duration-100 select-none"
-                            >
-                                +
-                            </button>
-                        </div>
-                    </div>
+        <div class="flex items-center gap-3">
+            <div
+                class="text-4xl font-black text-amber-600 tabular-nums transition-transform duration-150"
+                :class="{ 'scale-110': bulletinAnimating }"
+            >
+                {{ bulletinCount }}
+            </div>
+
+            <div class="flex gap-2">
+                <button
+                    @click="voteBulletin('-1')"
+                    :disabled="bulletinDisabled || bulletinCount === 0"
+                    class="bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
+                           disabled:opacity-40 disabled:cursor-not-allowed
+                           font-bold w-11 h-11 rounded-xl text-lg leading-none
+                           transition-all duration-100 select-none"
+                >
+                    −
+                </button>
+                <button
+                    @click="voteBulletin('+1')"
+                    :disabled="bulletinDisabled"
+                    class="bg-amber-500 hover:bg-amber-600 active:scale-95
+                           disabled:opacity-50 disabled:cursor-not-allowed
+                           text-white font-bold w-11 h-11 rounded-xl text-lg leading-none
+                           transition-all duration-100 select-none"
+                >
+                    +
+                </button>
+                
+                <!--  Bouton Appareil Photo -->
+                <button
+                    @click="openCamera"
+                    class="bg-blue-500 hover:bg-blue-600 active:scale-95 text-white
+                           disabled:opacity-50 disabled:cursor-not-allowed
+                           font-bold w-11 h-11 rounded-xl text-lg leading-none
+                           transition-all duration-100 select-none flex items-center justify-center"
+                    title="Prendre une photo du bulletin"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 📷 MODAL CAMÉRA -->
+<Teleport to="body">
+    <div v-if="showCameraModal" class="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-4">
+        <div class="w-full max-w-3xl">
+            <!-- Zone de vidéo -->
+            <div class="relative bg-black rounded-lg overflow-hidden mb-4">
+                <video 
+                    ref="videoElement" 
+                    autoplay 
+                    playsinline
+                    class="w-full h-auto max-h-[70vh] object-contain"
+                ></video>
+                
+                <!-- Indicateur d'enregistrement -->
+                <div class="absolute top-4 left-4 flex items-center gap-2 bg-red-600/90 text-white px-3 py-1.5 rounded-full text-sm font-medium">
+                    <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                    Caméra active
                 </div>
             </div>
+            
+            <!-- Canvas caché pour la capture -->
+            <canvas ref="canvasElement" class="hidden"></canvas>
+            
+            <!-- Boutons d'action -->
+            <div class="flex justify-center gap-4">
+                <button 
+                    @click="capturePhoto"
+                    :disabled="isCapturing"
+                    class="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-bold py-3 px-8 rounded-full text-lg transition-all active:scale-95 flex items-center gap-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {{ isCapturing ? 'Traitement...' : 'Prendre la photo' }}
+                </button>
+                <button 
+                    @click="closeCamera"
+                    class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-full text-lg transition-all active:scale-95"
+                >
+                    Annuler
+                </button>
+            </div>
+            
+            <p class="text-center text-gray-400 text-sm mt-4">
+                Positionnez le bulletin dans le cadre et cliquez sur "Prendre la photo"
+            </p>
+        </div>
+    </div>
+</Teleport>
 
             <!-- ── Candidats ────────────────────────────────────────── -->
             <div class="mb-6">

@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Operator;
 
 use App\Http\Controllers\Controller;
-use App\Models\VoteOption;
-use App\Models\VoteLog;
 use App\Models\BulletinLog;
+use App\Models\VoteLog;
+use App\Models\VoteOption;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class CountingController extends Controller
@@ -170,6 +171,49 @@ class CountingController extends Controller
         return response()->json([
             'success' => true,
             'count' => $this->currentCount($bureau->id, $validated['vote_option_id']),
+        ]);
+    }
+
+    public function uploadBulletinImage(Request $request)
+    {
+        dd($request->all());
+        $user = auth()->user();
+        $bureau = $user->bureauVote;
+
+        if (!$bureau) {
+            return response()->json(['error' => 'Aucun bureau assigné'], 403);
+        }
+
+        // Validation
+        $validated = $request->validate([
+            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:10240', // Max 10MB
+        ]);
+
+        // Générer un nom de fichier unique
+        $filename = 'bulletin_' . $bureau->id . '_' . now()->format('Ymd_His') . '_' . uniqid() . '.jpg';
+
+        // Stocker l'image
+        $path = $request->file('image')->storeAs(
+            'public/bulletins_scans/' . $bureau->id,
+            $filename
+        );
+
+        // Optionnel : Créer un log dans BulletinLog
+        BulletinLog::create([
+            'bureau_vote_id' => $bureau->id,
+            'user_id' => $user->id,
+            'action' => 'scan',
+            'quantity' => 0,
+            'is_manuel' => false,
+            'image_path' => str_replace('public/', '', $path),
+            'created_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Image enregistrée avec succès',
+            'url' => Storage::url($path),
+            'filename' => $filename,
         ]);
     }
 
