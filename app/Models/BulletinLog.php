@@ -9,7 +9,7 @@ class BulletinLog extends Model
 {
     use HasFactory;
 
-    public $timestamps = false;
+    public $timestamps = false; // on gère created_at manuellement, pas de updated_at
 
     protected $fillable = [
         'bureau_vote_id',
@@ -25,9 +25,10 @@ class BulletinLog extends Model
         'is_manuel'  => 'boolean',
     ];
 
-    public function bureauVote()
+    // Renommé bureauVote() -> bureau() pour rester cohérent avec VoteLog::bureau()
+    public function bureau()
     {
-        return $this->belongsTo(BureauVote::class);
+        return $this->belongsTo(BureauVote::class, 'bureau_vote_id');
     }
 
     public function user()
