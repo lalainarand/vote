@@ -61,7 +61,11 @@ Route::middleware(['auth', 'role:operator'])->prefix('operator')->name('operator
     Route::get('comptage', [CountingController::class, 'index'])->name('comptage.index');
     Route::post('comptage/vote', [CountingController::class, 'vote'])->name('comptage.vote');
     Route::post('comptage/vote-manuel', [CountingController::class, 'voteManuel'])
-    ->name('comptage.vote-manuel');
+        ->name('comptage.vote-manuel');
+    Route::post('comptage/bulletin', [CountingController::class, 'bulletinVote'])
+        ->name('comptage.bulletin');
+    Route::post('comptage/bulletin-manuel', [CountingController::class, 'bulletinVoteManuel'])
+        ->name('comptage.bulletin-manuel');
 
     // Vérification PV
     Route::get('pv', [PvEntryController::class, 'index'])->name('pv.index');

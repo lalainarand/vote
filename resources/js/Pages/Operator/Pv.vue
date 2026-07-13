@@ -79,7 +79,7 @@ const controlDetails = computed(() => {
         const noms = mismatches.map(({ counter }) => counter.nom).join(', ')
         details.push({
             key: 'c1',
-            level: 'error',
+            level: 'warning',
             title: 'C1 — Cohérence candidat',
             message: `Écart détecté pour ${mismatches.length} candidat(s) : ${noms}. Vérifiez la saisie ou le comptage.`,
         })
@@ -152,7 +152,6 @@ const controlDetails = computed(() => {
     return details
 })
 
-// Dérivé de controlDetails : plus de duplication de règles
 const hasCriticalError = computed(() =>
     controlDetails.value.some(d => d.level === 'error')
 )
@@ -164,7 +163,9 @@ const allPass = computed(() =>
 )
 
 const submit = () => {
-    if (hasCriticalError.value) return // garde-fou supplémentaire côté client
+    // On enregistre toujours, quel que soit le résultat des contrôles.
+    // Les écarts (y compris C1) restent visibles dans les alertes ci-dessus
+    // et sont transmis au backend pour traçabilité/anomalie éventuelle.
     form.post('/operator/pv')
 }
 </script>
@@ -263,17 +264,17 @@ const submit = () => {
                 </div>
 
                 <p v-if="hasCriticalError" class="mt-3 text-sm font-medium text-red-700">
-                    Corrigez les anomalies critiques (C3/C4) avant de pouvoir enregistrer ce PV.
+                    Anomalie(s) critique(s) détectée(s) (C3/C4). Vous pouvez tout de même enregistrer ; le bureau sera marqué pour vérification.
                 </p>
                 <p v-else-if="hasWarning" class="mt-3 text-sm font-medium text-amber-700">
-                    Des écarts non bloquants subsistent (C2). Vérifiez avant validation.
+                    Des écarts non bloquants subsistent (C1/C2). Vérifiez avant validation si possible.
                 </p>
             </div>
 
             <!-- Actions -->
             <div class="flex gap-3">
                 <button type="submit"
-                        :disabled="form.processing || hasCriticalError"
+                        :disabled="form.processing"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                     Enregistrer le PV
                 </button>

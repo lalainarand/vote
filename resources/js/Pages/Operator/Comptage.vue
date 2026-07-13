@@ -4,10 +4,14 @@ import axios from 'axios'
 import { reactive, ref, computed } from 'vue'
 
 const props = defineProps({
-    bureau:     Object,
-    locked:     Boolean,
-    candidates: Array,
-    blanc_nul:  Array,
+    bureau:         Object,
+    locked:         Boolean,
+    candidates:     Array,
+    blanc_nul:      Array,
+    bulletin_count: {
+        type: Number,
+        default: 0,
+    },
 })
 
 // ── Compteurs locaux réactifs ─────────────────────────────────────────────
@@ -145,6 +149,104 @@ const submitProcuration = async () => {
         procurationModal.loading = false
     }
 }
+
+// ── Compteur de bulletins (indépendant des candidats) ──────────────────────
+const bulletinCount = ref(props.bulletin_count)
+const bulletinAnimating = ref(false)
+const bulletinDisabled = ref(false)
+
+const triggerBulletinAnimation = () => {
+    bulletinAnimating.value = true
+    setTimeout(() => { bulletinAnimating.value = false }, 300)
+}
+
+const voteBulletin = async (action) => {
+    if (bulletinDisabled.value) return
+    bulletinDisabled.value = true
+    setTimeout(() => { bulletinDisabled.value = false }, 900)
+
+    const delta = action === '+1' ? 1 : -1
+    if (bulletinCount.value + delta < 0) return
+
+    bulletinCount.value += delta
+    triggerBulletinAnimation()
+
+    try {
+        const res = await axios.post('/operator/comptage/bulletin', { action })
+        if (res.data.success) {
+            bulletinCount.value = res.data.count
+        }
+    } catch (e) {
+        bulletinCount.value -= delta
+
+        if (e.response) {
+            if (e.response.status === 422) {
+                console.warn('Action refusée :', e.response.data.message || e.response.data.error)
+            } else if (e.response.status === 429) {
+                // Double-clic, on ignore
+            } else if (e.response.status === 403) {
+                alert('Ce bureau est verrouillé.')
+            } else {
+                console.error('Erreur serveur', e.response.status)
+            }
+        } else {
+            console.error('Erreur réseau :', e)
+        }
+    }
+}
+
+// ── Modale saisie manuelle groupée du nombre de bulletins ──────────────────
+const bulletinManuelModal = reactive({
+    open: false,
+    quantity: null,
+    loading: false,
+    error: null,
+})
+
+const openBulletinManuelModal = () => {
+    bulletinManuelModal.open = true
+    bulletinManuelModal.quantity = null
+    bulletinManuelModal.error = null
+}
+
+const closeBulletinManuelModal = () => {
+    bulletinManuelModal.open = false
+}
+
+const submitBulletinManuel = async () => {
+    const qty = bulletinManuelModal.quantity
+
+    if (!qty || qty < 1) {
+        bulletinManuelModal.error = 'Entrez un nombre valide'
+        return
+    }
+
+    bulletinManuelModal.loading = true
+    bulletinManuelModal.error = null
+
+    try {
+        const res = await axios.post('/operator/comptage/bulletin-manuel', { quantity: qty })
+
+        if (res.data.success) {
+            bulletinCount.value = res.data.count
+            triggerBulletinAnimation()
+            closeBulletinManuelModal()
+        }
+    } catch (e) {
+        if (e.response?.status === 422) {
+            bulletinManuelModal.error = e.response.data.errors?.quantity?.[0]
+                || e.response.data.message
+                || 'Valeur invalide'
+        } else if (e.response?.status === 403) {
+            bulletinManuelModal.error = e.response.data.error || 'Ce bureau est verrouillé.'
+        } else {
+            bulletinManuelModal.error = 'Erreur lors de l\'enregistrement'
+            console.error(e)
+        }
+    } finally {
+        bulletinManuelModal.loading = false
+    }
+}
 </script>
 
 <template>
@@ -166,6 +268,59 @@ const submitProcuration = async () => {
         </div>
 
         <template v-else>
+
+            <!-- ── Compteur de bulletins dépouillés ────────────────────── -->
+            <div class="mb-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div class="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                            Bulletins dépouillés
+                        </h2>
+                        <p class="text-[11px] text-gray-400 max-w-xs">
+                            1 bulletin peut contenir de 1 à 9 votes candidats. Ce compteur est indépendant des compteurs candidats.
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <div
+                            class="text-4xl font-black text-amber-600 tabular-nums transition-transform duration-150"
+                            :class="{ 'scale-110': bulletinAnimating }"
+                        >
+                            {{ bulletinCount }}
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button
+                                @click="voteBulletin('-1')"
+                                :disabled="bulletinDisabled || bulletinCount === 0"
+                                class="bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
+                                       disabled:opacity-40 disabled:cursor-not-allowed
+                                       font-bold w-11 h-11 rounded-xl text-lg leading-none
+                                       transition-all duration-100 select-none"
+                            >
+                                −
+                            </button>
+                            <button
+                                @click="voteBulletin('+1')"
+                                :disabled="bulletinDisabled"
+                                class="bg-amber-500 hover:bg-amber-600 active:scale-95
+                                       disabled:opacity-50 disabled:cursor-not-allowed
+                                       text-white font-bold w-11 h-11 rounded-xl text-lg leading-none
+                                       transition-all duration-100 select-none"
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- <button
+                    @click="openBulletinManuelModal"
+                    class="text-[11px] text-amber-600 hover:text-amber-800 hover:underline font-medium mt-3"
+                >
+                    + Saisie groupée (par paquet)
+                </button> -->
+            </div>
 
             <!-- ── Candidats ────────────────────────────────────────── -->
             <div class="mb-6">
@@ -362,6 +517,65 @@ const submitProcuration = async () => {
                         </button>
                         <button
                             @click="closeProcurationModal"
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg text-sm"
+                        >
+                            Annuler
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ══ Modale Saisie groupée — Bulletins ══════════════════════════ -->
+        <Teleport to="body">
+            <div v-if="bulletinManuelModal.open"
+                 @click.self="closeBulletinManuelModal"
+                 class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-base font-bold text-gray-900">Saisie groupée — Bulletins</h3>
+                        <button @click="closeBulletinManuelModal" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">Ajouter un nombre de bulletins dépouillés en une seule saisie.</p>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de bulletins</label>
+                    <input
+                        v-model.number="bulletinManuelModal.quantity"
+                        type="number"
+                        min="1"
+                        autofocus
+                        placeholder="Ex: 50"
+                        @keyup.enter="submitBulletinManuel"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-lg font-semibold
+                               focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    />
+                    <p v-if="bulletinManuelModal.error" class="text-sm text-red-600 mt-1.5">
+                        {{ bulletinManuelModal.error }}
+                    </p>
+
+                    <div class="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-3">
+                        <p class="text-xs text-amber-700 leading-snug">
+                            Cette saisie est tracée dans le journal d'audit comme un ajout groupé (distinct des clics unitaires).
+                        </p>
+                    </div>
+
+                    <div class="flex gap-2 mt-5">
+                        <button
+                            @click="submitBulletinManuel"
+                            :disabled="bulletinManuelModal.loading || !bulletinManuelModal.quantity"
+                            class="flex-1 bg-amber-600 hover:bg-amber-700 active:scale-95
+                                   disabled:opacity-50 disabled:cursor-not-allowed
+                                   text-white font-bold py-2.5 rounded-lg text-sm
+                                   transition-all duration-100"
+                        >
+                            {{ bulletinManuelModal.loading ? 'Enregistrement...' : 'Valider' }}
+                        </button>
+                        <button
+                            @click="closeBulletinManuelModal"
                             class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg text-sm"
                         >
                             Annuler

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Operator;
 use App\Http\Controllers\Controller;
 use App\Models\VoteOption;
 use App\Models\VoteLog;
+use App\Models\BulletinLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -28,6 +29,7 @@ class CountingController extends Controller
                 'locked' => true,
                 'candidates' => [],
                 'blanc_nul' => [],
+                'bulletin_count' => 0,
             ]);
         }
 
@@ -68,6 +70,7 @@ class CountingController extends Controller
             'locked' => false,
             'candidates' => $options->where('type', 'candidat')->values(),
             'blanc_nul' => $options->whereIn('type', ['blanc', 'nul'])->values(),
+            'bulletin_count' => $this->currentBulletinCount($bureau->id),
         ]);
     }
 
@@ -171,6 +174,94 @@ class CountingController extends Controller
     }
 
     /**
+     * Incrémente/décrémente le compteur de bulletins dépouillés (clic unitaire).
+     * Même logique anti-double-clic que vote().
+     */
+    public function bulletinVote(Request $request)
+    {
+        $validated = $request->validate([
+            'action' => 'required|in:+1,-1',
+        ]);
+
+        $user = auth()->user();
+        $bureau = $user->bureauVote;
+
+        if (!$bureau) {
+            return response()->json(['error' => 'Aucun bureau assigné'], 403);
+        }
+
+        if (!in_array($bureau->status, ['pending', 'counting'])) {
+            return response()->json(['error' => 'Le bureau n\'est plus en phase de comptage'], 403);
+        }
+
+        $lockKey = "bulletin_lock_{$user->id}_{$bureau->id}";
+        if (Cache::has($lockKey)) {
+            return response()->json(['error' => 'Clic trop rapide'], 429);
+        }
+        Cache::put($lockKey, true, 0.5);
+
+        DB::transaction(function () use ($validated, $bureau, $user) {
+            if ($validated['action'] === '-1') {
+                $current = $this->currentBulletinCount($bureau->id);
+                if ($current <= 0) {
+                    throw new \Exception('Impossible : le compteur de bulletins ne peut pas être négatif');
+                }
+            }
+
+            BulletinLog::create([
+                'bureau_vote_id' => $bureau->id,
+                'user_id'        => $user->id,
+                'action'         => $validated['action'],
+                'quantity'       => 1,
+                'is_manuel'      => false,
+                'created_at'     => now(),
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'count' => $this->currentBulletinCount($bureau->id),
+        ]);
+    }
+
+    /**
+     * Saisie manuelle groupée du nombre de bulletins (ex: comptage par paquet de 50).
+     */
+    public function bulletinVoteManuel(Request $request)
+    {
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1|max:9999',
+        ]);
+
+        $user = auth()->user();
+        $bureau = $user->bureauVote;
+
+        if (!$bureau) {
+            return response()->json(['error' => 'Aucun bureau assigné'], 403);
+        }
+
+        if (!in_array($bureau->status, ['pending', 'counting'])) {
+            return response()->json(['error' => 'Le bureau n\'est plus en phase de comptage'], 403);
+        }
+
+        DB::transaction(function () use ($validated, $bureau, $user) {
+            BulletinLog::create([
+                'bureau_vote_id' => $bureau->id,
+                'user_id'        => $user->id,
+                'action'         => '+1',
+                'quantity'       => $validated['quantity'],
+                'is_manuel'      => true,
+                'created_at'     => now(),
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'count' => $this->currentBulletinCount($bureau->id),
+        ]);
+    }
+
+    /**
      * Calcule le compteur courant (votes normaux + procurations) pour une option.
      */
     private function currentCount(int $bureauId, int $voteOptionId): int
@@ -181,6 +272,21 @@ class CountingController extends Controller
             ->sum('quantity');
         $minus = VoteLog::where('bureau_vote_id', $bureauId)
             ->where('vote_option_id', $voteOptionId)
+            ->where('action', '-1')
+            ->sum('quantity');
+
+        return $plus - $minus;
+    }
+
+    /**
+     * Calcule le compteur courant de bulletins dépouillés pour un bureau.
+     */
+    private function currentBulletinCount(int $bureauId): int
+    {
+        $plus = BulletinLog::where('bureau_vote_id', $bureauId)
+            ->where('action', '+1')
+            ->sum('quantity');
+        $minus = BulletinLog::where('bureau_vote_id', $bureauId)
             ->where('action', '-1')
             ->sum('quantity');
 
