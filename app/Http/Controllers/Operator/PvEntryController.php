@@ -23,12 +23,11 @@ class PvEntryController extends Controller
             abort(403, 'Aucun bureau assigné');
         }
 
-        // 🚀 OPTIMISATION : Requêtes groupées en une seule (plus de N+1)
         $counters = VoteOption::orderBy('ordre_affichage')
             ->select('id', 'nom', 'type', 'ordre_affichage')
-            ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')], 'quantity')
-            ->withSum(['voteLogs as minus_sum' => fn($q) => $q->where('action', '-1')], 'quantity')
-            ->withSum(['voteLogs as procuration_sum' => fn($q) => $q->where('is_procuration', true)], 'quantity')
+            ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->withSum(['voteLogs as minus_sum' => fn($q) => $q->where('action', '-1')->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->withSum(['voteLogs as procuration_sum' => fn($q) => $q->where('is_procuration', true)->where('bureau_vote_id', $bureau->id)], 'quantity')
             ->get()
             ->map(function ($opt) {
                 return [
@@ -47,7 +46,7 @@ class PvEntryController extends Controller
 
         $stats = $bureau->statistics;
 
-        // Comptage système des bulletins
+        // Comptage système des bulletins (celui-ci était déjà correct car le where était présent)
         $systemBallotsCount = BulletinLog::where('bureau_vote_id', $bureau->id)
             ->selectRaw("SUM(CASE WHEN action = '+1' THEN quantity ELSE 0 END) - SUM(CASE WHEN action = '-1' THEN quantity ELSE 0 END) as total")
             ->value('total') ?? 0;
@@ -101,7 +100,7 @@ class PvEntryController extends Controller
             BureauStatistic::updateOrCreate(
                 ['bureau_vote_id' => $bureau->id],
                 [
-                    'voters' => $validated['ballots_found'], 
+                    'voters' => $validated['ballots_found'],
                     'ballots_found' => $validated['ballots_found'],
                     'pv_source' => 'operator',
                 ]
