@@ -374,71 +374,71 @@ const handleKeydown = (e) => {
                 </div>
 
                 <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                    <div
-                        v-for="c in filteredCandidates" :key="c.id"
-                        class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col"
-                    >
-                        <!-- Photo carrée dominante + badge numéro superposé -->
-                        <div class="relative w-full aspect-square bg-gray-100">
-                            <img
-                                :src="getPhotoUrl(c) || '/images/candidat-placeholder.png'"
-                                @error="onImgError"
-                                :alt="c.nom"
-                                class="w-full h-full object-cover"
-                            />
-                            <span class="absolute top-1.5 left-1.5 min-w-[24px] h-6 px-1.5 rounded-md bg-blue-600 text-white text-xs font-bold flex items-center justify-center shadow">
-                                {{ c.ordre_affichage ?? c.id }}
-                            </span>
-                        </div>
+    <div
+        v-for="c in filteredCandidates" :key="c.id"
+        class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col"
+    >
+        <!-- Photo réduite + badge numéro dominant -->
+        <div class="relative w-full aspect-[5/4] bg-gray-100">
+            <img
+                :src="getPhotoUrl(c) || '/images/candidat-placeholder.png'"
+                @error="onImgError"
+                :alt="c.nom"
+                class="w-full h-full object-cover"
+            />
+            <span class="absolute top-1.5 left-1.5 min-w-[52px] h-10 px-3 rounded-lg bg-blue-600 text-white text-lg font-black flex items-center justify-center shadow-lg ring-2 ring-white">
+                N°{{ c.ordre_affichage ?? c.id }}
+            </span>
+        </div>
 
-                        <div class="p-2 flex flex-col items-center">
-                            <!-- Nom -->
-                            <div class="text-xs font-semibold text-gray-900 text-center leading-tight mb-1.5 line-clamp-2 h-8">
-                                {{ c.nom }}
-                            </div>
+        <div class="p-2 flex flex-col items-center">
+            <!-- Nom -->
+            <div class="text-xs font-semibold text-gray-900 text-center leading-tight mb-1.5 line-clamp-2 h-8">
+                {{ c.nom }}
+            </div>
 
-                            <!-- Compteur -->
-                            <div
-                                class="text-xl font-black text-blue-600 tabular-nums transition-transform duration-150 mb-1.5"
-                                :class="{ 'scale-110': animating[c.id] }"
-                            >
-                                {{ counts[c.id] }}
-                            </div>
+            <!-- Compteur -->
+            <div
+                class="text-xl font-black text-blue-600 tabular-nums transition-transform duration-150 mb-1.5"
+                :class="{ 'scale-110': animating[c.id] }"
+            >
+                {{ counts[c.id] }}
+            </div>
 
-                            <!-- Boutons +1 / -1 -->
-                            <div class="flex gap-1 w-full mb-1">
-                                <button
-                                    @click="vote(c.id, '-1')"
-                                    :disabled="disabledButtons[c.id] || counts[c.id] === 0"
-                                    class="flex-1 bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
-                                           disabled:opacity-40 disabled:cursor-not-allowed
-                                           font-bold py-1.5 rounded-md text-sm leading-none
-                                           transition-all duration-100 select-none"
-                                >
-                                    −
-                                </button>
-                                <button
-                                    @click="vote(c.id, '+1')"
-                                    :disabled="disabledButtons[c.id]"
-                                    class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
-                                           disabled:opacity-50 disabled:cursor-not-allowed
-                                           text-white font-bold py-1.5 rounded-md text-sm leading-none
-                                           transition-all duration-100 select-none"
-                                >
-                                    +
-                                </button>
-                            </div>
+            <!-- Boutons +1 / -1 -->
+            <div class="flex gap-1 w-full mb-1">
+                <button
+                    @click="vote(c.id, '-1')"
+                    :disabled="disabledButtons[c.id] || counts[c.id] === 0"
+                    class="flex-1 bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
+                           disabled:opacity-40 disabled:cursor-not-allowed
+                           font-bold py-1.5 rounded-md text-sm leading-none
+                           transition-all duration-100 select-none"
+                >
+                    −
+                </button>
+                <button
+                    @click="vote(c.id, '+1')"
+                    :disabled="disabledButtons[c.id]"
+                    class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
+                           disabled:opacity-50 disabled:cursor-not-allowed
+                           text-white font-bold py-1.5 rounded-md text-sm leading-none
+                           transition-all duration-100 select-none"
+                >
+                    +
+                </button>
+            </div>
 
-                            <!-- Lien procuration discret -->
-                            <button
-                                @click="openProcurationModal(c)"
-                                class="text-[10px] text-purple-500 hover:text-purple-700 hover:underline font-medium"
-                            >
-                                + Procuration
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <!-- Lien procuration discret -->
+            <button
+                @click="openProcurationModal(c)"
+                class="text-[10px] text-purple-500 hover:text-purple-700 hover:underline font-medium"
+            >
+                + Procuration
+            </button>
+        </div>
+    </div>
+</div>
             </div>
 
             <!-- ── Blanc / Nul ──────────────────────────────────────── -->
