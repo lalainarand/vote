@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Operator;
 use App\Http\Controllers\Controller;
 use App\Models\VoteOption;
 use App\Models\VoteLog;
+use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\BureauStatistic;
 use Illuminate\Http\Request;
@@ -22,31 +23,23 @@ class PvEntryController extends Controller
             abort(403, 'Aucun bureau assigné');
         }
 
-        // Compteurs système (procurations incluses via quantity)
-        $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($opt) use ($bureau) {
-            $plus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $opt->id)
-                ->where('action', '+1')
-                ->sum('quantity');
-            $minus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $opt->id)
-                ->where('action', '-1')
-                ->sum('quantity');
-            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $opt->id)
-                ->where('is_procuration', true)
-                ->sum('quantity');
+        // 🚀 OPTIMISATION : Requêtes groupées en une seule (plus de N+1)
+        $counters = VoteOption::orderBy('ordre_affichage')
+            ->select('id', 'nom', 'type', 'ordre_affichage')
+            ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')], 'quantity')
+            ->withSum(['voteLogs as minus_sum' => fn($q) => $q->where('action', '-1')], 'quantity')
+            ->withSum(['voteLogs as procuration_sum' => fn($q) => $q->where('is_procuration', true)], 'quantity')
+            ->get()
+            ->map(function ($opt) {
+                return [
+                    'id' => $opt->id,
+                    'nom' => $opt->nom,
+                    'type' => $opt->type,
+                    'system_count' => ($opt->plus_sum ?? 0) - ($opt->minus_sum ?? 0),
+                    'procuration' => $opt->procuration_sum ?? 0,
+                ];
+            });
 
-            return [
-                'id' => $opt->id,
-                'nom' => $opt->nom,
-                'type' => $opt->type,
-                'system_count' => $plus - $minus,
-                'procuration' => $procuration,
-            ];
-        });
-
-        // PV déjà saisis (si édition)
         $pvValues = $bureau->bureauResults()
             ->where('source', 'counting')
             ->pluck('count', 'vote_option_id')
@@ -54,15 +47,19 @@ class PvEntryController extends Controller
 
         $stats = $bureau->statistics;
 
+        // Comptage système des bulletins
+        $systemBallotsCount = BulletinLog::where('bureau_vote_id', $bureau->id)
+            ->selectRaw("SUM(CASE WHEN action = '+1' THEN quantity ELSE 0 END) - SUM(CASE WHEN action = '-1' THEN quantity ELSE 0 END) as total")
+            ->value('total') ?? 0;
+
         return Inertia::render('Operator/Pv', [
             'bureau' => $bureau,
             'counters' => $counters,
             'pv_values' => $pvValues,
             'statistics' => $stats ? [
-                'registered_voters' => $stats->registered_voters,
-                'voters' => $stats->voters,
                 'ballots_found' => $stats->ballots_found,
             ] : null,
+            'system_ballots_count' => (int) $systemBallotsCount,
         ]);
     }
 
@@ -83,13 +80,11 @@ class PvEntryController extends Controller
             'pv_data' => 'required|array',
             'pv_data.*.vote_option_id' => 'required|exists:vote_options,id',
             'pv_data.*.count' => 'required|integer|min:0',
-            'registered_voters' => 'required|integer|min:0',
-            'voters' => 'required|integer|min:0',
-            'ballots_found' => 'required|integer|min:0',
+            'ballots_found' => 'required|integer|min:0', // Votants = Bulletins trouvés
         ]);
 
         DB::transaction(function () use ($validated, $bureau, $user) {
-            // Enregistrer les résultats
+            // 1. Enregistrer les résultats par option
             foreach ($validated['pv_data'] as $pv) {
                 BureauResult::updateOrCreate(
                     ['bureau_vote_id' => $bureau->id, 'vote_option_id' => $pv['vote_option_id']],
@@ -102,23 +97,21 @@ class PvEntryController extends Controller
                 );
             }
 
-            // Statistiques
+            // 2. Statistiques (voters est automatiquement égal à ballots_found)
             BureauStatistic::updateOrCreate(
                 ['bureau_vote_id' => $bureau->id],
                 [
-                    'registered_voters' => $validated['registered_voters'],
-                    'voters' => $validated['voters'],
+                    'voters' => $validated['ballots_found'], 
                     'ballots_found' => $validated['ballots_found'],
                     'pv_source' => 'operator',
                 ]
             );
 
-            // Passage en pv_entry
             $bureau->update(['status' => 'pv_entry']);
         });
 
         return redirect()
             ->route('operator.cloture.index')
-            ->with('success', 'PV enregistré. Vous pouvez maintenant clôturer le bureau.');
+            ->with('success', 'PV enregistré avec succès. Vous pouvez maintenant clôturer le bureau.');
     }
 }

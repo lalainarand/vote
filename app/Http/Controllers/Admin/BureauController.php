@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\BureauVote;
-use App\Models\VoteOption;
+use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\BureauStatistic;
+use App\Models\BureauVote;
 use App\Models\VoteLog;
+use App\Models\VoteOption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -204,48 +205,44 @@ class BureauController extends Controller
     /**
      * Écran de saisie PV manuelle admin
      */
+
     public function manualPv(BureauVote $bureau)
     {
         $bureau->load(['statistics', 'bureauResults']);
 
-        // Compteurs système (procurations incluses via quantity)
-        $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($option) use ($bureau) {
-            $plus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $option->id)
-                ->where('action', '+1')
-                ->sum('quantity');
+        $counters = VoteOption::orderBy('ordre_affichage')
+            ->select('id', 'nom', 'type', 'ordre_affichage')
+            ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->withSum(['voteLogs as minus_sum' => fn($q) => $q->where('action', '-1')->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->withSum(['voteLogs as procuration_sum' => fn($q) => $q->where('is_procuration', true)->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->get()
+            ->map(function ($opt) {
+                return [
+                    'id' => $opt->id,
+                    'nom' => $opt->nom,
+                    'type' => $opt->type,
+                    'system_count' => ($opt->plus_sum ?? 0) - ($opt->minus_sum ?? 0),
+                    'procuration' => $opt->procuration_sum ?? 0,
+                ];
+            });
 
-            $minus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $option->id)
-                ->where('action', '-1')
-                ->sum('quantity');
-
-            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $option->id)
-                ->where('is_procuration', true)
-                ->sum('quantity');
-
-            return [
-                'id' => $option->id,
-                'nom' => $option->nom,
-                'type' => $option->type,
-                'system_count' => $plus - $minus,
-                'procuration' => $procuration,
-            ];
-        });
-
-        // Valeurs PV actuelles (si déjà saisies)
         $pvValues = $bureau->bureauResults->pluck('count', 'vote_option_id')->toArray();
+
+        // Cette partie était déjà correcte car elle contenait déjà le where('bureau_vote_id', $bureau->id)
+        $systemBallotsCount = BulletinLog::where('bureau_vote_id', $bureau->id)
+            ->selectRaw("SUM(CASE WHEN action = '+1' THEN quantity ELSE 0 END) - SUM(CASE WHEN action = '-1' THEN quantity ELSE 0 END) as total")
+            ->value('total') ?? 0;
 
         return Inertia::render('Admin/Bureaux/ManualPv', [
             'bureau' => $bureau,
             'counters' => $counters,
             'pv_values' => $pvValues,
+            'system_ballots_count' => (int) $systemBallotsCount,
         ]);
     }
 
     /**
-     * Enregistrement PV manuelle admin
+     * Enregistrement PV manuel admin
      */
     public function storeManualPv(Request $request, BureauVote $bureau)
     {
@@ -253,9 +250,7 @@ class BureauController extends Controller
             'pv_data' => 'required|array',
             'pv_data.*.vote_option_id' => 'required|exists:vote_options,id',
             'pv_data.*.count' => 'required|integer|min:0',
-            'registered_voters' => 'required|integer|min:0',
-            'voters' => 'required|integer|min:0',
-            'ballots_found' => 'required|integer|min:0',
+            'ballots_found' => 'required|integer|min:0', // Votants sera égal à ceci
             'note' => 'nullable|string|max:1000',
             'mark_anomaly' => 'boolean',
         ]);
@@ -264,7 +259,7 @@ class BureauController extends Controller
             // Déterminer la source
             $source = $bureau->voteLogs()->exists() ? 'admin_override' : 'manual_pv';
 
-            // Enregistrer les résultats par candidat
+            // 1. Enregistrer les résultats par candidat/option
             foreach ($validated['pv_data'] as $pv) {
                 BureauResult::updateOrCreate(
                     [
@@ -280,34 +275,38 @@ class BureauController extends Controller
                 );
             }
 
-            // Enregistrer les statistiques
+            // 2. Enregistrer les statistiques (voters = ballots_found)
             BureauStatistic::updateOrCreate(
                 ['bureau_vote_id' => $bureau->id],
                 [
-                    'registered_voters' => $validated['registered_voters'],
-                    'voters' => $validated['voters'],
+                    'voters' => $validated['ballots_found'],
                     'ballots_found' => $validated['ballots_found'],
                     'pv_source' => 'admin',
                     'pv_note' => $validated['note'] ?? null,
                 ]
             );
 
-            // Statut du bureau
-            $newStatus = $validated['mark_anomaly'] ?? false ? 'anomaly' : 'pv_admin';
+            // 3. Statut du bureau
+            $newStatus = $validated['mark_anomaly'] ? 'anomaly' : 'pv_admin';
             $bureau->update(['status' => $newStatus]);
 
-            // Log dans vote_logs pour traçabilité
-            VoteLog::create([
-                'bureau_vote_id' => $bureau->id,
-                'vote_option_id' => VoteOption::where('type', 'candidat')->first()->id,
-                'user_id' => auth()->id(),
-                'action' => '+1',
-                'created_at' => now(),
-            ]);
+            // 4. Log dans vote_logs pour traçabilité (conservé de votre logique originale)
+            $firstCandidate = VoteOption::where('type', 'candidat')->first();
+            if ($firstCandidate) {
+                VoteLog::create([
+                    'bureau_vote_id' => $bureau->id,
+                    'vote_option_id' => $firstCandidate->id,
+                    'user_id' => auth()->id(),
+                    'action' => '+1',
+                    'quantity' => 0, // Quantité 0 pour ne pas fausser les comptes, juste pour la trace
+                    'is_procuration' => false,
+                    'created_at' => now(),
+                ]);
+            }
         });
 
         return redirect()
-            ->route('admin.bureaux.index')
+            ->route('admin.bureaux.index') // Adaptez si le nom de route est différent
             ->with('success', 'PV manuel enregistré avec succès');
     }
 }

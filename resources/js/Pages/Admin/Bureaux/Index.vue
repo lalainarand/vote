@@ -97,9 +97,9 @@ const deleteBureau = (id) => {
                         </td>
                        
                         <td class="px-4 py-3 text-right space-x-2">
-                            <Link :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
+                            <Link v-if="bureau.status ==='validated'" :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
                                   class="text-purple-600 hover:text-purple-800 text-sm font-medium">
-                                PV manuel
+                                Voir PV
                             </Link>
                             <Link :href="`/admin/bureaux/${bureau.id}/edit`"
                                   class="text-blue-600 hover:text-blue-800 text-sm font-medium">

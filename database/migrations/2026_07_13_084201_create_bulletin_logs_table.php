@@ -10,8 +10,15 @@ return new class extends Migration
     {
         Schema::create('bulletin_logs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('bureau_vote_id')->constrained()->onDelete('cascade');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+
+            $table->foreignId('bureau_vote_id')
+                ->constrained('bureaux_vote')
+                ->cascadeOnDelete();
+
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
+
             $table->enum('action', ['+1', '-1']);
             $table->unsignedInteger('quantity')->default(1);
             $table->boolean('is_manuel')->default(false);
