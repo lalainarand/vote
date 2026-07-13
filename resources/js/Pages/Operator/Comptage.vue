@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import GeometricVotes from '@/Components/GeometricVotes.vue' // 🆕 Import du composant
 import axios from 'axios'
 import { reactive, ref, computed } from 'vue'
 
@@ -14,7 +15,9 @@ const props = defineProps({
     },
 })
 
-// ── Compteurs locaux réactifs ─────────────────────────────────────────────
+const showModal = ref(false) // 🆕 Pour contrôler l'affichage du modal
+
+// ── Compteurs locaux réactifs ────────────────────────────────────────────
 const counts = reactive(
     Object.fromEntries(
         [...(props.candidates ?? []), ...(props.blanc_nul ?? [])]
@@ -40,7 +43,7 @@ const disableButton = (id) => {
 const getPhotoUrl = (c) => c.photo ? `/storage/${c.photo}` : null
 const onImgError = (e) => { e.target.src = '/images/candidat-placeholder.png' }
 
-// ── Recherche / filtre ──────────────────────────────────────────────────────
+// ── Recherche / filtre ─────────────────────────────────────────────────────
 const search = ref('')
 const filteredCandidates = computed(() => {
     if (!search.value.trim()) return props.candidates
@@ -49,6 +52,20 @@ const filteredCandidates = computed(() => {
         c.nom.toLowerCase().includes(q) ||
         String(c.ordre_affichage ?? c.id).includes(q)
     )
+})
+
+//  Total des votes pour le modal géométrique
+const totalVotes = computed(() => {
+    return [...props.candidates, ...props.blanc_nul].reduce((sum, c) => sum + (counts[c.id] ?? 0), 0)
+})
+
+// 🆕 Toutes les options pour l'affichage géométrique (candidats + blanc/nul)
+const allOptions = computed(() => {
+    return [...props.candidates, ...props.blanc_nul].map(c => ({
+        id: c.id,
+        nom: c.nom,
+        count: counts[c.id] ?? 0
+    }))
 })
 
 // ── Vote +1 / -1 classique ─────────────────────────────────────────────────
@@ -247,16 +264,33 @@ const submitBulletinManuel = async () => {
         bulletinManuelModal.loading = false
     }
 }
+
+// 🆕 Fermer le modal avec la touche Echap
+const handleKeydown = (e) => {
+    if (e.key === 'Escape') showModal.value = false
+}
 </script>
 
 <template>
-    <AuthenticatedLayout>
+    <AuthenticatedLayout @keydown.escape="handleKeydown">
         <template #header>
             <div class="flex items-center justify-between">
                 <h1 class="text-base font-semibold text-gray-800">
                     Comptage — {{ bureau.nom }}
                 </h1>
-                <span class="text-sm text-gray-500 font-mono">{{ bureau.code }}</span>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-500 font-mono">{{ bureau.code }}</span>
+                    <!-- 🆕 BOUTON POUR OUVRIR LE MODAL GÉOMÉTRIQUE -->
+                    <button 
+                        @click="showModal = true"
+                        class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                        Vue géométrique
+                    </button>
+                </div>
             </div>
         </template>
 
@@ -313,13 +347,6 @@ const submitBulletinManuel = async () => {
                         </div>
                     </div>
                 </div>
-
-                <!-- <button
-                    @click="openBulletinManuelModal"
-                    class="text-[11px] text-amber-600 hover:text-amber-800 hover:underline font-medium mt-3"
-                >
-                    + Saisie groupée (par paquet)
-                </button> -->
             </div>
 
             <!-- ── Candidats ────────────────────────────────────────── -->
@@ -466,6 +493,48 @@ const submitBulletinManuel = async () => {
             </div>
 
         </template>
+
+        <!-- ══ MODAL VUE GÉOMÉTRIQUE ══════════════════════════════════════ -->
+        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showModal = false">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col">
+                <!-- Header du modal -->
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Dépouillement géométrique</h3>
+                        <p class="text-sm text-gray-500">Bureau : {{ bureau.nom }} ({{ bureau.code }})</p>
+                    </div>
+                    <button @click="showModal = false" class="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-2 rounded-full transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Contenu scrollable du modal -->
+                <div class="p-6 overflow-y-auto flex-1">
+                    <div class="md:grid-cols-2 gap-x-8 gap-y-2">
+                        <GeometricVotes 
+                            v-for="opt in allOptions" 
+                            :key="opt.id" 
+                            :count="opt.count" 
+                            :name="opt.nom" 
+                        />
+                    </div>
+
+                    <div class="mt-8 pt-6 border-t-2 border-gray-100 flex justify-between items-center bg-blue-50 p-4 rounded-xl">
+                        <span class="text-lg font-bold text-gray-800">TOTAL GÉNÉRAL</span>
+                        <span class="text-3xl font-mono font-black text-blue-700">{{ totalVotes }} voix</span>
+                    </div>
+                </div>
+
+                <!-- Footer du modal -->
+                <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end">
+                    <button @click="showModal = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg font-medium transition-colors">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- ══ Modale Procuration ══════════════════════════════════════ -->
         <Teleport to="body">
