@@ -49,7 +49,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
 
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
-    Route::get('audit-bulletins', [AuditController::class, 'bulletins'])->name('audit.bulletins');
+    Route::get('bulletins/audit', [AuditController::class, 'bulletins'])->name('audit.bulletins');
 });
 
 // ── Routes Opérateur ──────────────────────────────────────────────────────
