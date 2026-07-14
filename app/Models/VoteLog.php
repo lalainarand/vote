@@ -14,6 +14,7 @@ class VoteLog extends Model
         'action',
         'quantity',
         'is_procuration',
+        'is_restored',
         'created_at',
     ];
     public function bureau()

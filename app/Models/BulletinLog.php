@@ -17,6 +17,7 @@ class BulletinLog extends Model
         'action',
         'quantity',
         'is_manuel',
+        'is_restored',
         'created_at',
     ];
 

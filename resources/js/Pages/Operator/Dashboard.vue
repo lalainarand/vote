@@ -26,6 +26,7 @@ const props = defineProps({
 
 const showModal = ref(false)
 const showResetModalGet = ref(false)
+const restoringId = ref(null)
 
 const statusLabel = {
     pending:   { label: 'En attente',  cls: 'bg-gray-100 text-gray-600' },
@@ -73,7 +74,7 @@ const showResetModal = ref(false)
 const resetReason = ref('')
 const resetLoading = ref(false)
 const resetError = ref(null)
-const resetConfirmText = ref('') // sécurité supplémentaire : taper "RESET" pour confirmer
+const resetConfirmText = ref('') 
 
 const openResetModal = () => {
     resetReason.value = ''
@@ -107,6 +108,37 @@ const submitReset = async () => {
         resetError.value = e.response?.data?.error || 'Erreur lors de la réinitialisation.'
     } finally {
         resetLoading.value = false
+    }
+}
+
+const restoreData = async (resetItem) => {
+    const isCounting = ['pending', 'counting', 'anomaly'].includes(props.bureau.status)
+    
+    const warningMsg = isCounting 
+        ? "ATTENTION : Cette action va REMETTRE À ZÉRO le comptage en cours, puis appliquer les valeurs de ce snapshot. Continuer ?"
+        : "ATTENTION : Vous n'êtes plus en phase de comptage. Cette action va AJOUTER ces valeurs au comptage actuel (correction). Continuer ?";
+
+    if (!confirm(warningMsg)) return;
+
+    restoringId.value = resetItem.id;
+
+    try {
+        const res = await axios.post(`/operator/comptage/restore-reset/${resetItem.id}`);
+        
+        if (res.data.success) {
+            alert(res.data.message);
+            
+            // Mise à jour locale de l'interface sans rechargement complet
+            resetItem.restored_at = new Date().toISOString(); // Marque comme restauré
+            
+            //Recharger la page pour être sûr d'avoir les compteurs à jour
+            window.location.reload(); 
+        }
+    } catch (error) {
+        console.error(error);
+        alert(error.response?.data?.error || 'Une erreur est survenue lors de la réactivation.');
+    } finally {
+        restoringId.value = null;
     }
 }
 
@@ -489,33 +521,55 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                         </div>
 
                         <div v-else class="space-y-4">
-                            <div v-for="reset in reset_history" :key="reset.id" class="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-colors">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div class="flex items-center gap-2">
-                                        <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-1 rounded">
-                                            {{ reset.user_name }}
-                                        </span>
-                                        <span class="text-xs text-gray-500 flex items-center gap-1">
-                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                            {{ reset.created_at }}
-                                        </span>
-                                    </div>
-                                    <span class="text-sm font-bold text-red-600 bg-red-50 px-2 py-1 rounded">
-                                        -{{ reset.total_votes_annules }} voix
-                                    </span>
-                                </div>
-                                
-                                <div class="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r">
-                                    <p class="text-xs font-semibold text-amber-800 uppercase mb-1">Motif de la réinitialisation</p>
-                                    <p class="text-sm text-gray-800 italic">
-                                        "{{ reset.reason }}"
-                                    </p>
-                                </div>
+                           <div v-for="reset in reset_history" :key="reset.id" class="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-colors">
+    <div class="flex justify-between items-start mb-3">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-1 rounded">
+                {{ reset.user_name }}
+            </span>
+            <span class="text-xs text-gray-500 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {{ reset.created_at }}
+            </span>
+        </div>
+        <span class="text-sm font-bold text-red-600 bg-red-50 px-2 py-1 rounded">
+            {{ reset.total_votes_annules }} voix
+        </span>
+    </div>
+    
+    <div class="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r mb-3">
+        <p class="text-xs font-semibold text-amber-800 uppercase mb-1">Motif de la réinitialisation</p>
+        <p class="text-sm text-gray-800 italic">"{{ reset.reason }}"</p>
+    </div>
 
-                                <div class="mt-2 text-xs text-gray-500 text-right">
-                                    Bulletins dépouillés remis à zéro : <span class="font-mono font-semibold">{{ reset.bulletin_count_annule }}</span>
-                                </div>
-                            </div>
+    <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+        <div class="text-xs text-gray-500">
+            Bulletins dépouillés remis à zéro : <span class="font-mono font-semibold">{{ reset.bulletin_count_annule }}</span>
+        </div>
+
+        <!-- BOUTON D'ACTION : Réactiver ou Déjà réactivé -->
+        <div v-if="reset.restored_at">
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Déjà réactivé
+            </span>
+        </div>
+        <div v-else>
+            <button 
+                @click="restoreData(reset)"
+                :disabled="restoringId === reset.id"
+                class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-full transition-colors"
+            >
+                <svg v-if="restoringId === reset.id" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                {{ restoringId === reset.id ? 'Réactivation...' : 'Réactiver ces données' }}
+            </button>
+        </div>
+    </div>
+</div>
                         </div>
                     </div>
 

@@ -17,6 +17,7 @@ class VoteReset extends Model
         'snapshot',
         'reason',
         'created_at',
+        'restored_at',
     ];
 
     protected $casts = [

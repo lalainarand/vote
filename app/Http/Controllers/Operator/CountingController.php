@@ -445,4 +445,107 @@ class CountingController extends Controller
             'message' => 'Comptage réinitialisé. Vous pouvez ressaisir les votes.',
         ]);
     }
+
+    public function restoreReset(Request $request, VoteReset $voteReset)
+    {
+        $user = auth()->user();
+        $bureau = $user->bureauVote;
+
+        if (!$bureau || $voteReset->bureau_vote_id !== $bureau->id) {
+            return response()->json(['error' => 'Non autorisé'], 403);
+        }
+
+        if ($voteReset->restored_at) {
+            return response()->json(['error' => 'Ce snapshot a déjà été réactivé.'], 409);
+        }
+
+        $snapshot = $voteReset->snapshot;
+        // Vérifie si nous sommes en phase de comptage active
+        $isCounting = in_array($bureau->status, ['pending', 'counting', 'anomaly']);
+
+        DB::transaction(function () use ($bureau, $user, $snapshot, $isCounting, $voteReset) {
+            
+            // ── SCÉNARIO 1 : Nous sommes en comptage → On remet d'abord à 0 ──
+            if ($isCounting) {
+                // 1a. Reset des candidats
+                $options = VoteOption::all();
+                foreach ($options as $opt) {
+                    $plus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '+1')->sum('quantity');
+                    $minus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '-1')->sum('quantity');
+                    $currentCount = $plus - $minus;
+
+                    if ($currentCount > 0) {
+                        VoteLog::create([
+                            'bureau_vote_id' => $bureau->id,
+                            'vote_option_id' => $opt->id,
+                            'user_id'        => $user->id,
+                            'action'         => '-1',
+                            'quantity'       => $currentCount,
+                            'is_procuration' => false,
+                            'is_reset'       => true,
+                            'created_at'     => now(),
+                        ]);
+                    }
+                }
+
+                // 1b. Reset des bulletins
+                $bPlus = BulletinLog::where('bureau_vote_id', $bureau->id)->where('action', '+1')->sum('quantity');
+                $bMinus = BulletinLog::where('bureau_vote_id', $bureau->id)->where('action', '-1')->sum('quantity');
+                $currentBulletins = $bPlus - $bMinus;
+
+                if ($currentBulletins > 0) {
+                    BulletinLog::create([
+                        'bureau_vote_id' => $bureau->id,
+                        'user_id'        => $user->id,
+                        'action'         => '-1',
+                        'quantity'       => $currentBulletins,
+                        'is_manuel'      => true,
+                        'is_reset'       => true,
+                        'created_at'     => now(),
+                    ]);
+                }
+            }
+
+            // ── SCÉNARIO 1 & 2 : On réactive les valeurs du snapshot ──
+            if (isset($snapshot['candidates']) && is_array($snapshot['candidates'])) {
+                foreach ($snapshot['candidates'] as $optionId => $count) {
+                    if ($count > 0) {
+                        VoteLog::create([
+                            'bureau_vote_id' => $bureau->id,
+                            'vote_option_id' => $optionId,
+                            'user_id'        => $user->id,
+                            'action'         => '+1',
+                            'quantity'       => $count,
+                            'is_procuration' => false, // Restauré comme vote normal (le snapshot fusionne les deux)
+                            'is_restored'    => true,  // Marqueur pour l'audit
+                            'created_at'     => now(),
+                        ]);
+                    }
+                }
+            }
+
+            if (isset($snapshot['bulletin_count']) && $snapshot['bulletin_count'] > 0) {
+                BulletinLog::create([
+                    'bureau_vote_id' => $bureau->id,
+                    'user_id'        => $user->id,
+                    'action'         => '+1',
+                    'quantity'       => $snapshot['bulletin_count'],
+                    'is_manuel'      => true,
+                    'is_restored'    => true,
+                    'created_at'     => now(),
+                ]);
+            }
+
+            // Marquer ce snapshot comme réactivé
+            $voteReset->update(['restored_at' => now()]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => $isCounting 
+                ? 'Compteur remis à zéro et données du snapshot réactivées avec succès.' 
+                : 'Données du snapshot réactivées avec succès (mode correction).',
+            'new_status' => $isCounting ? $bureau->status : $bureau->status,
+        ]);
+    }
 }
