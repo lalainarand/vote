@@ -14,16 +14,14 @@ use Inertia\Inertia;
 class AuditController extends Controller
 {
 
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $query = VoteLog::with(['bureau', 'voteOption', 'user'])
-            //EXCLUSION DES LOGS DE RESET / RESTORE
-            // On garde uniquement les vrais votes (is_reset = false ET is_restored = false)
+            // 🛡️ EXCLUSION UNIQUEMENT DES LOGS D'ANNULATION (RESET)
+            // On masque les compensations système, mais on GARDE les votes restaurés (is_restored = true) 
+            // car ils représentent l'état valide et actuel des données.
             ->where(function ($q) {
                 $q->whereNull('is_reset')->orWhere('is_reset', false);
-            })
-            ->where(function ($q) {
-                $q->whereNull('is_restored')->orWhere('is_restored', false);
             })
             ->orderBy('created_at', 'desc');
 
@@ -55,6 +53,7 @@ class AuditController extends Controller
                 'action' => $log->action,
                 'quantity' => $log->quantity,
                 'is_procuration' => $log->is_procuration,
+                'is_restored' => $log->is_restored ?? false, // 🆕 Utile pour l'affichage frontend (badge "Restauré")
                 'created_at' => Carbon::parse($log->created_at)->format('d/m/Y H:i:s'),
                 'bureau' => $log->bureau ? [
                     'code' => $log->bureau->code,
@@ -76,12 +75,9 @@ class AuditController extends Controller
     public function bulletins(Request $request)
     {
         $query = BulletinLog::with(['bureau', 'user'])
-            //EXCLUSION DES LOGS DE RESET / RESTORE (Bulletins)
+            // 🛡️ EXCLUSION UNIQUEMENT DES LOGS D'ANNULATION (RESET)
             ->where(function ($q) {
                 $q->whereNull('is_reset')->orWhere('is_reset', false);
-            })
-            ->where(function ($q) {
-                $q->whereNull('is_restored')->orWhere('is_restored', false);
             })
             ->orderBy('created_at', 'desc');
 
@@ -113,6 +109,7 @@ class AuditController extends Controller
                 'quantity'    => $log->quantity,
                 'action'      => $log->action,
                 'is_manuel'   => $log->is_manuel,
+                'is_restored' => $log->is_restored ?? false, // 🆕 Utile pour l'affichage frontend
                 'created_at'  => Carbon::parse($log->created_at)->format('d/m/Y H:i:s'),
                 'bureau'      => $log->bureau ? [
                     'code' => $log->bureau->code,

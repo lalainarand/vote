@@ -132,7 +132,7 @@ const restoreData = async (resetItem) => {
             resetItem.restored_at = new Date().toISOString(); // Marque comme restauré
             
             //Recharger la page pour être sûr d'avoir les compteurs à jour
-            // window.location.reload(); 
+            window.location.reload(); 
         }
     } catch (error) {
         console.error(error);

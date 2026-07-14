@@ -359,36 +359,29 @@ class CountingController extends Controller
         $snapshot = ['candidates' => [], 'bulletin_count' => 0];
 
         DB::transaction(function () use ($bureau, $user, $validated, &$snapshot) {
-            // 1. Compenser chaque option candidat à zéro, en séparant normal / procuration
             $options = VoteOption::all();
+
             foreach ($options as $opt) {
-                $normalPlus = VoteLog::where('bureau_vote_id', $bureau->id)
-                    ->where('vote_option_id', $opt->id)
-                    ->where('action', '+1')
-                    ->where('is_procuration', false)
-                    ->sum('quantity');
-                $normalMinus = VoteLog::where('bureau_vote_id', $bureau->id)
-                    ->where('vote_option_id', $opt->id)
-                    ->where('action', '-1')
-                    ->where('is_procuration', false)
-                    ->sum('quantity');
+                $normalPlus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '+1')->where('is_procuration', false)->sum('quantity');
+                $normalMinus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '-1')->where('is_procuration', false)->sum('quantity');
                 $normalCount = $normalPlus - $normalMinus;
 
-                $procPlus = VoteLog::where('bureau_vote_id', $bureau->id)
-                    ->where('vote_option_id', $opt->id)
-                    ->where('action', '+1')
-                    ->where('is_procuration', true)
-                    ->sum('quantity');
-                $procMinus = VoteLog::where('bureau_vote_id', $bureau->id)
-                    ->where('vote_option_id', $opt->id)
-                    ->where('action', '-1')
-                    ->where('is_procuration', true)
-                    ->sum('quantity');
+                $procPlus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '+1')->where('is_procuration', true)->sum('quantity');
+                $procMinus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '-1')->where('is_procuration', true)->sum('quantity');
                 $procCount = $procPlus - $procMinus;
 
                 $snapshot['candidates'][$opt->id] = $normalCount + $procCount;
 
+                // ── TRAITEMENT VOTES NORMAUX ──
                 if ($normalCount !== 0) {
+                    // 1. On marque les anciens logs comme "annulés" pour qu'ils disparaissent de l'audit
+                    VoteLog::where('bureau_vote_id', $bureau->id)
+                        ->where('vote_option_id', $opt->id)
+                        ->where('is_procuration', false)
+                        ->where('is_reset', false) // On ne touche qu'aux logs encore valides
+                        ->update(['is_reset' => true]);
+
+                    // 2. On insère la compensation pour que le total mathématique reste à 0
                     VoteLog::create([
                         'bureau_vote_id' => $bureau->id,
                         'vote_option_id' => $opt->id,
@@ -401,7 +394,14 @@ class CountingController extends Controller
                     ]);
                 }
 
+                // ── TRAITEMENT PROCURATIONS ──
                 if ($procCount !== 0) {
+                    VoteLog::where('bureau_vote_id', $bureau->id)
+                        ->where('vote_option_id', $opt->id)
+                        ->where('is_procuration', true)
+                        ->where('is_reset', false)
+                        ->update(['is_reset' => true]);
+
                     VoteLog::create([
                         'bureau_vote_id' => $bureau->id,
                         'vote_option_id' => $opt->id,
@@ -415,11 +415,17 @@ class CountingController extends Controller
                 }
             }
 
-            // 2. Compenser le compteur de bulletins à zéro (inchangé)
+            // ── TRAITEMENT BULLETINS ──
             $bulletinCount = BulletinLog::currentCountForBureau($bureau->id);
             $snapshot['bulletin_count'] = $bulletinCount;
 
             if ($bulletinCount !== 0) {
+                // 1. Marquer les anciens logs de bulletins
+                BulletinLog::where('bureau_vote_id', $bureau->id)
+                    ->where('is_reset', false)
+                    ->update(['is_reset' => true]);
+
+                // 2. Insérer la compensation
                 BulletinLog::create([
                     'bureau_vote_id' => $bureau->id,
                     'user_id'        => $user->id,
@@ -431,7 +437,6 @@ class CountingController extends Controller
                 ]);
             }
 
-            // 3. Snapshot de l'ancien état, pour audit/traçabilité (photos non touchées)
             VoteReset::create([
                 'bureau_vote_id' => $bureau->id,
                 'user_id'        => $user->id,
@@ -461,27 +466,53 @@ class CountingController extends Controller
         }
 
         $snapshot = $voteReset->snapshot;
+
         // Vérifie si nous sommes en phase de comptage active
         $isCounting = in_array($bureau->status, ['pending', 'counting', 'anomaly']);
 
         DB::transaction(function () use ($bureau, $user, $snapshot, $isCounting, $voteReset) {
 
-            // ── SCÉNARIO 1 : Nous sommes en comptage → On remet d'abord à 0 ──
+            // ── ÉTAPE 1 : Annuler l'état actuel pour que l'audit reste propre ──
+            // (On ne le fait que si on est en comptage, comme demandé, pour écraser l'existant)
             if ($isCounting) {
-                // 1a. Reset des candidats
+                // 1a. Annulation des candidats
                 $options = VoteOption::all();
                 foreach ($options as $opt) {
-                    $plus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '+1')->sum('quantity');
-                    $minus = VoteLog::where('bureau_vote_id', $bureau->id)->where('vote_option_id', $opt->id)->where('action', '-1')->sum('quantity');
+                    // Calculer le total actuellement valide (is_reset = false ou null)
+                    $plus = VoteLog::where('bureau_vote_id', $bureau->id)
+                        ->where('vote_option_id', $opt->id)
+                        ->where('action', '+1')
+                        ->where(function ($q) {
+                            $q->whereNull('is_reset')->orWhere('is_reset', false);
+                        })
+                        ->sum('quantity');
+
+                    $minus = VoteLog::where('bureau_vote_id', $bureau->id)
+                        ->where('vote_option_id', $opt->id)
+                        ->where('action', '-1')
+                        ->where(function ($q) {
+                            $q->whereNull('is_reset')->orWhere('is_reset', false);
+                        })
+                        ->sum('quantity');
+
                     $currentCount = $plus - $minus;
 
-                    if ($currentCount > 0) {
+                    if ($currentCount !== 0) {
+                        // A. Marquer les logs valides actuels comme annulés
+                        VoteLog::where('bureau_vote_id', $bureau->id)
+                            ->where('vote_option_id', $opt->id)
+                            ->where(function ($q) {
+                                $q->whereNull('is_reset')->orWhere('is_reset', false);
+                            })
+                            ->update(['is_reset' => true]);
+
+                        // B. Insérer la compensation pour que le total DB retombe mathématiquement à 0
                         VoteLog::create([
                             'bureau_vote_id' => $bureau->id,
                             'vote_option_id' => $opt->id,
                             'user_id'        => $user->id,
-                            'action'         => '-1',
-                            'quantity'       => $currentCount,
+                            'action'         => $currentCount > 0 ? '-1' : '+1',
+                            'quantity'       => abs($currentCount),
                             'is_procuration' => false,
                             'is_reset'       => true,
                             'created_at'     => now(),
@@ -489,17 +520,33 @@ class CountingController extends Controller
                     }
                 }
 
-                // 1b. Reset des bulletins
-                $bPlus = BulletinLog::where('bureau_vote_id', $bureau->id)->where('action', '+1')->sum('quantity');
-                $bMinus = BulletinLog::where('bureau_vote_id', $bureau->id)->where('action', '-1')->sum('quantity');
+                // 1b. Annulation des bulletins
+                $bPlus = BulletinLog::where('bureau_vote_id', $bureau->id)
+                    ->where('action', '+1')
+                    ->where(function ($q) {
+                        $q->whereNull('is_reset')->orWhere('is_reset', false);
+                    })
+                    ->sum('quantity');
+                $bMinus = BulletinLog::where('bureau_vote_id', $bureau->id)
+                    ->where('action', '-1')
+                    ->where(function ($q) {
+                        $q->whereNull('is_reset')->orWhere('is_reset', false);
+                    })
+                    ->sum('quantity');
                 $currentBulletins = $bPlus - $bMinus;
 
-                if ($currentBulletins > 0) {
+                if ($currentBulletins !== 0) {
+                    BulletinLog::where('bureau_vote_id', $bureau->id)
+                        ->where(function ($q) {
+                            $q->whereNull('is_reset')->orWhere('is_reset', false);
+                        })
+                        ->update(['is_reset' => true]);
+
                     BulletinLog::create([
                         'bureau_vote_id' => $bureau->id,
                         'user_id'        => $user->id,
-                        'action'         => '-1',
-                        'quantity'       => $currentBulletins,
+                        'action'         => $currentBulletins > 0 ? '-1' : '+1',
+                        'quantity'       => abs($currentBulletins),
                         'is_manuel'      => true,
                         'is_reset'       => true,
                         'created_at'     => now(),
@@ -507,7 +554,7 @@ class CountingController extends Controller
                 }
             }
 
-            // ── SCÉNARIO 1 & 2 : On réactive les valeurs du snapshot ──
+            // ── ÉTAPE 2 : Réactiver les valeurs du snapshot ──
             if (isset($snapshot['candidates']) && is_array($snapshot['candidates'])) {
                 foreach ($snapshot['candidates'] as $optionId => $count) {
                     if ($count > 0) {
@@ -517,8 +564,8 @@ class CountingController extends Controller
                             'user_id'        => $user->id,
                             'action'         => '+1',
                             'quantity'       => $count,
-                            'is_procuration' => false, // Restauré comme vote normal (le snapshot fusionne les deux)
-                            'is_restored'    => true,  // Marqueur pour l'audit
+                            'is_procuration' => false,
+                            'is_restored'    => true,  // Visible dans l'audit
                             'created_at'     => now(),
                         ]);
                     }
@@ -532,7 +579,7 @@ class CountingController extends Controller
                     'action'         => '+1',
                     'quantity'       => $snapshot['bulletin_count'],
                     'is_manuel'      => true,
-                    'is_restored'    => true,
+                    'is_restored'    => true,  // Visible dans l'audit
                     'created_at'     => now(),
                 ]);
             }
@@ -545,8 +592,7 @@ class CountingController extends Controller
             'success' => true,
             'message' => $isCounting
                 ? 'Compteur remis à zéro et données du snapshot réactivées avec succès.'
-                : 'Données du snapshot réactivées avec succès (mode correction).',
-            'new_status' => $isCounting ? $bureau->status : $bureau->status,
+                : 'Données du snapshot réactivées avec succès (mode correction additive).',
         ]);
     }
 }
