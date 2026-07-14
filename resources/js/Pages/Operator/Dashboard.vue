@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import GeometricVotes from '@/Components/GeometricVotes.vue' 
-import { ref, computed } from 'vue'
+import GeometricVotes from '@/Components/GeometricVotes.vue'
+import { Link } from '@inertiajs/vue3'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
     bureau: Object,
@@ -10,6 +11,10 @@ const props = defineProps({
     statistics: Object,
     error: String,
     total_procuration: Number,
+    bulletin_images: {
+        type: Array,
+        default: () => [],
+    },
 })
 
 const showModal = ref(false)
@@ -22,11 +27,11 @@ const statusLabel = {
     anomaly:   { label: 'Anomalie',    cls: 'bg-red-100 text-red-700' },
 }
 
-const candidates = computed(() => 
+const candidates = computed(() =>
     props.counters.filter(c => c.type === 'candidat' || c.type === 'nul' || c.type === 'blanc')
 )
 
-const totalVotes = computed(() => 
+const totalVotes = computed(() =>
     candidates.value.reduce((sum, c) => sum + c.count, 0)
 )
 
@@ -36,14 +41,46 @@ const onImgError = (e) => {
     e.target.src = '/images/candidat-placeholder.png'
 }
 
-// Fermer le modal avec la touche Echap
-const handleKeydown = (e) => {
-    if (e.key === 'Escape') showModal.value = false
+// ── Galerie photos du bureau — zoom (lightbox) ──────────────────────────────
+const zoomIndex = ref(null) // null = fermé, sinon index dans bulletin_images
+const zoomOpen = computed(() => zoomIndex.value !== null)
+const zoomImage = computed(() =>
+    zoomIndex.value !== null ? props.bulletin_images[zoomIndex.value] : null
+)
+
+const openZoom = (index) => { zoomIndex.value = index }
+const closeZoom = () => { zoomIndex.value = null }
+
+const nextZoom = () => {
+    if (zoomIndex.value === null) return
+    zoomIndex.value = (zoomIndex.value + 1) % props.bulletin_images.length
 }
+const prevZoom = () => {
+    if (zoomIndex.value === null) return
+    zoomIndex.value = (zoomIndex.value - 1 + props.bulletin_images.length) % props.bulletin_images.length
+}
+
+// Fermer les modals avec la touche Echap (écoute sur window, seule façon fiable)
+const handleKeydown = (e) => {
+    if (e.key === 'Escape') {
+        if (zoomOpen.value) {
+            closeZoom()
+        } else if (showModal.value) {
+            showModal.value = false
+        }
+    } else if (zoomOpen.value && e.key === 'ArrowRight') {
+        nextZoom()
+    } else if (zoomOpen.value && e.key === 'ArrowLeft') {
+        prevZoom()
+    }
+}
+
+onMounted(() => window.addEventListener('keydown', handleKeydown))
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>
-    <AuthenticatedLayout @keydown.escape="handleKeydown">
+    <AuthenticatedLayout>
         <template #header>
             <h1 class="text-base font-semibold text-gray-800">Tableau de bord Opérateur</h1>
         </template>
@@ -72,7 +109,7 @@ const handleKeydown = (e) => {
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
                     <h2 class="font-semibold text-gray-800">Comptage en cours</h2>
                     <!-- BOUTON POUR OUVRIR LE MODAL GÉOMÉTRIQUE -->
-                    <button 
+                    <button
                         @click="showModal = true"
                         class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
                     >
@@ -113,6 +150,39 @@ const handleKeydown = (e) => {
 </div>
             </div>
 
+            <!-- ── Photos du bureau (compteurs scannés) ─────────────────── -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-gray-800">
+                        Photos du bureau
+                        <span class="text-gray-400 font-normal text-sm">({{ bulletin_images.length }})</span>
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div v-if="bulletin_images.length === 0" class="text-center text-sm text-gray-400 py-6">
+                        Aucune photo enregistrée pour ce bureau.
+                    </div>
+                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        <button
+                            v-for="(img, index) in bulletin_images" :key="img.id"
+                            @click="openZoom(index)"
+                            class="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 hover:ring-2 hover:ring-blue-500 transition-all"
+                        >
+                            <img :src="img.url" :alt="img.filename" class="w-full h-full object-cover" loading="lazy" />
+                            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 8v5M8.5 10.5h5"/>
+                                </svg>
+                            </div>
+                            <span class="absolute bottom-1 left-1 right-1 bg-black/60 text-white text-[10px] font-mono px-1.5 py-0.5 rounded truncate">
+                                {{ img.taken_at }}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Actions rapides -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <Link :href="`/operator/comptage`" class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-6 text-center transition-colors shadow-sm">
@@ -149,11 +219,11 @@ const handleKeydown = (e) => {
                 <!-- Contenu scrollable du modal -->
                 <div class="p-6 overflow-y-auto flex-1">
                     <div class="md:grid-cols-2 gap-x-8 gap-y-2">
-                        <GeometricVotes 
-                            v-for="c in candidates" 
-                            :key="c.id" 
-                            :count="c.count" 
-                            :name="c.nom" 
+                        <GeometricVotes
+                            v-for="c in candidates"
+                            :key="c.id"
+                            :count="c.count"
+                            :name="c.nom"
                         />
                     </div>
 
@@ -171,5 +241,53 @@ const handleKeydown = (e) => {
                 </div>
             </div>
         </div>
+
+        <!-- ══ ZOOM PHOTO (lightbox) ══════════════════════════════════════ -->
+        <Teleport to="body">
+            <div v-if="zoomOpen"
+                 @click.self="closeZoom"
+                 class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85">
+
+                <!-- Bouton fermer -->
+                <button @click="closeZoom"
+                        class="absolute top-4 right-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2.5 rounded-full transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+
+                <!-- Flèche précédent -->
+                <button v-if="bulletin_images.length > 1" @click.stop="prevZoom"
+                        class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-3 rounded-full transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+
+                <!-- Flèche suivant -->
+                <button v-if="bulletin_images.length > 1" @click.stop="nextZoom"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-3 rounded-full transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+
+                <!-- Image zoomée -->
+                <div class="max-w-[92vw] max-h-[85vh] flex flex-col items-center gap-3" @click.stop>
+                    <img :src="zoomImage?.url" :alt="zoomImage?.filename"
+                         class="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl" />
+                    <div class="flex items-center gap-3 text-white/80 text-sm font-mono">
+                        <span>{{ zoomImage?.taken_at }}</span>
+                        <span v-if="bulletin_images.length > 1" class="text-white/50">
+                            {{ zoomIndex + 1 }} / {{ bulletin_images.length }}
+                        </span>
+                        <a :href="zoomImage?.url" download
+                           class="text-blue-300 hover:text-blue-200 underline">
+                            Télécharger
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>

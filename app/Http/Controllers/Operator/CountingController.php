@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Operator;
 
 use App\Http\Controllers\Controller;
+use App\Models\BulletinImage;
 use App\Models\BulletinLog;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
@@ -176,44 +177,43 @@ class CountingController extends Controller
 
     public function uploadBulletinImage(Request $request)
     {
-        dd($request->all());
         $user = auth()->user();
         $bureau = $user->bureauVote;
 
         if (!$bureau) {
-            return response()->json(['error' => 'Aucun bureau assigné'], 403);
+            return response()->json([
+                'error' => 'Aucun bureau assigné'
+            ], 403);
         }
 
-        // Validation
-        $validated = $request->validate([
-            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:10240', // Max 10MB
+        $request->validate([
+            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:10240',
         ]);
 
-        // Générer un nom de fichier unique
-        $filename = 'bulletin_' . $bureau->id . '_' . now()->format('Ymd_His') . '_' . uniqid() . '.jpg';
+        $filename = 'compteur_' . $bureau->id . '_' . now()->format('Ymd_His') . '_' . uniqid() . '.jpg';
 
-        // Stocker l'image
+
         $path = $request->file('image')->storeAs(
-            'public/bulletins_scans/' . $bureau->id,
-            $filename
+            'compteurs_scans/' . $bureau->id,
+            $filename,
+            'public'
         );
 
-        // Optionnel : Créer un log dans BulletinLog
-        BulletinLog::create([
+        $image = BulletinImage::create([
             'bureau_vote_id' => $bureau->id,
-            'user_id' => $user->id,
-            'action' => 'scan',
-            'quantity' => 0,
-            'is_manuel' => false,
-            'image_path' => str_replace('public/', '', $path),
-            'created_at' => now(),
+            'user_id'        => $user->id,
+            'path'           => $path,
+            'filename'       => $filename,
+            'taken_at'       => now(),
         ]);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Image enregistrée avec succès',
-            'url' => Storage::url($path),
-            'filename' => $filename,
+            'success'   => true,
+            'message'   => 'Image enregistrée avec succès',
+            'id'        => $image->id,
+            'url'       => $image->url,
+            'filename'  => $filename,
+            'taken_at'  => $image->taken_at->format('d/m/Y H:i'),
         ]);
     }
 

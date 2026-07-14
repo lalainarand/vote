@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Operator;
 
 use App\Http\Controllers\Controller;
-use App\Models\VoteOption;
-use App\Models\VoteLog;
+use App\Models\BulletinImage;
 use App\Models\BureauResult;
+use App\Models\VoteLog;
+use App\Models\VoteOption;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -70,12 +71,24 @@ class DashboardController extends Controller
             'ballots_found' => $bureau->statistics->ballots_found,
         ] : null;
 
+        // Photos du compteur/bulletins de ce bureau (les plus récentes en premier)
+        $bulletinImages = BulletinImage::where('bureau_vote_id', $bureau->id)
+            ->orderByDesc('taken_at')
+            ->get()
+            ->map(fn($img) => [
+                'id'       => $img->id,
+                'url'      => $img->url,
+                'filename' => $img->filename,
+                'taken_at' => $img->taken_at->format('d/m/Y H:i'),
+            ]);
+
         return Inertia::render('Operator/Dashboard', [
             'bureau' => $bureau,
             'counters' => $counters,
             'pv_results' => $pvResults,
             'statistics' => $stats,
             'total_procuration' => (int) $totalProcuration,
+            'bulletin_images' => $bulletinImages,
         ]);
     }
 }
