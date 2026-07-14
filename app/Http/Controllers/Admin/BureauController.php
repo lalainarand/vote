@@ -21,19 +21,53 @@ class BureauController extends Controller
     public function index(Request $request)
     {
         $query = BureauVote::with(['users', 'statistics'])
-            ->withCount('bulletinImages'); // ← ajouté : bureau.bulletin_images_count
+            ->withCount('bulletinImages')
 
-        // Filtre par statut
+            // 1. Compter le nombre total de réinitialisations
+            ->withCount('voteResets')
+
+            // 2. Récupérer uniquement la DERNIÈRE réinitialisation pour l'aperçu (motif + date)
+            ->with(['voteResets' => function ($q) {
+                $q->latest()->select('id', 'bureau_vote_id', 'reason', 'created_at');
+            }])
+
+            // 3. Calculer le compteur en temps réel (Somme des +1 moins Somme des -1)
+            ->withSum(['voteLogs as sum_plus' => fn($q) => $q->where('action', '+1')], 'quantity')
+            ->withSum(['voteLogs as sum_minus' => fn($q) => $q->where('action', '-1')], 'quantity');
+
+        // Filtres existants
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
-
-        // Filtre : bureaux sans PV saisi
         if ($request->boolean('no_pv')) {
             $query->whereDoesntHave('bureauResults');
         }
 
         $bureaux = $query->orderBy('code')->paginate(15)->withQueryString();
+
+        // Formatage des données pour Inertia
+        $bureaux->getCollection()->transform(function ($bureau) {
+            $latestReset = $bureau->voteResets->first();
+
+            return [
+                'id' => $bureau->id,
+                'code' => $bureau->code,
+                'nom' => $bureau->nom,
+                'status' => $bureau->status,
+                'user_name' => $bureau->users->first()?->name ?? '—',
+                'bulletin_images_count' => $bureau->bulletin_images_count,
+
+                // Données de réinitialisation
+                'reset_count' => $bureau->vote_resets_count,
+                'latest_reset' => $latestReset ? [
+                    'reason' => $latestReset->reason ?: 'Aucun motif fourni',
+                    'created_at' => \Carbon\Carbon::parse($latestReset->created_at)->format('d/m/Y à H:i'),
+                ] : null,
+
+                // Compteur en temps réel
+                'live_votes' => ($bureau->sum_plus ?? 0) - ($bureau->sum_minus ?? 0),
+            ];
+        });
 
         return Inertia::render('Admin/Bureaux/Index', [
             'bureaux' => $bureaux,

@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { ref } from 'vue'
 
 const props = defineProps({
     bureaux: Object,
@@ -31,9 +32,29 @@ const filterNoPv = () => {
 }
 
 const deleteBureau = (id) => {
-    if (confirm('Supprimer ce bureau ?')) {
+    if (confirm('Supprimer ce bureau ? Cette action est irréversible.')) {
         router.delete(`/admin/bureaux/${id}`)
     }
+}
+
+// --- Tooltip réinitialisations (Teleport pour échapper à l'overflow-hidden du wrapper) ---
+const tooltipVisible = ref(false)
+const tooltipStyle = ref({})
+const tooltipData = ref(null)
+
+const showTooltip = (event, resetInfo) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    tooltipStyle.value = {
+        top: `${rect.top - 8}px`,
+        left: `${rect.left + rect.width / 2}px`,
+        transform: 'translate(-50%, -100%)',
+    }
+    tooltipData.value = resetInfo
+    tooltipVisible.value = true
+}
+
+const hideTooltip = () => {
+    tooltipVisible.value = false
 }
 </script>
 
@@ -43,7 +64,7 @@ const deleteBureau = (id) => {
             <div class="flex items-center justify-between">
                 <h1 class="text-base font-semibold text-gray-800">Bureaux de vote</h1>
                 <Link href="/admin/bureaux/create"
-                      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                     + Nouveau bureau
                 </Link>
             </div>
@@ -70,31 +91,47 @@ const deleteBureau = (id) => {
         </div>
 
         <!-- Tableau -->
-        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">
+        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
             <table class="w-full">
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Code</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Opérateur</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Compteur</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Réinit.</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photos</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    <tr v-for="bureau in bureaux.data" :key="bureau.id" class="hover:bg-gray-50">
-                        <td class="px-4 py-3 text-sm font-mono text-gray-900">{{ bureau.code }}</td>
+                    <tr v-for="bureau in bureaux.data" :key="bureau.id" class="hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3 text-sm font-mono text-gray-900 font-medium">{{ bureau.code }}</td>
                         <td class="px-4 py-3 text-sm text-gray-700">{{ bureau.nom }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-700">
-                            {{ bureau.users?.[0]?.name ?? '—' }}
-                        </td>
-                        <td class="px-4 py-3">
-                            <span :class="statusLabel[bureau.status]?.cls ?? 'bg-gray-100 text-gray-600'"
-                                  class="text-xs font-medium px-2.5 py-1 rounded-full">
-                                {{ statusLabel[bureau.status]?.label ?? bureau.status }}
+                        <td class="px-4 py-3 text-sm text-gray-700">{{ bureau.user_name }}</td>
+
+                        <!-- Compteur en temps réel -->
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center gap-1.5 text-sm font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-md">
+                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                {{ bureau.live_votes }}
                             </span>
                         </td>
+
+                        <!-- Réinitialisations avec Tooltip (Teleport) -->
+                        <td class="px-4 py-3 text-center">
+                            <div v-if="bureau.reset_count > 0"
+                                 class="inline-block cursor-help"
+                                 @mouseenter="showTooltip($event, bureau.latest_reset)"
+                                 @mouseleave="hideTooltip">
+                                <span class="bg-red-100 text-red-700 text-xs font-bold px-2.5 py-1 rounded-full border border-red-200">
+                                    {{ bureau.reset_count }}
+                                </span>
+                            </div>
+                            <span v-else class="text-gray-400 text-xs font-medium">0</span>
+                        </td>
+
+                        <!-- Photos -->
                         <td class="px-4 py-3 text-center">
                             <Link :href="`/admin/bureaux/${bureau.id}/photos`"
                                   class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors"
@@ -108,19 +145,24 @@ const deleteBureau = (id) => {
                                 {{ bureau.bulletin_images_count }}
                             </Link>
                         </td>
+
+                        <!-- Actions -->
                         <td class="px-4 py-3 text-right space-x-2">
-                            <Link v-if="bureau.status ==='validated'" :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
-                                  class="text-purple-600 hover:text-purple-800 text-sm font-medium">
-                                Voir PV
+                            <Link :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
+                                  class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                                  title="Voir ou saisir le PV (données en temps réel)">
+                                PV
                             </Link>
+
                             <Link :href="`/admin/bureaux/${bureau.id}/edit`"
-                                  class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                  class="text-blue-600 hover:text-blue-800 text-xs font-semibold px-2 py-1 rounded hover:bg-blue-50 transition-colors">
                                 Modifier
                             </Link>
+
                             <button v-if="bureau.status !== 'validated'"
                                     @click="deleteBureau(bureau.id)"
-                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
-                                Supprimer
+                                    class="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 transition-colors">
+                                Suppr.
                             </button>
                         </td>
                     </tr>
@@ -128,16 +170,31 @@ const deleteBureau = (id) => {
             </table>
 
             <!-- Pagination -->
-            <div v-if="bureaux.links.length > 3" class="px-4 py-3 border-t border-gray-100">
+            <div v-if="bureaux.links.length > 3" class="px-4 py-3 border-t border-gray-100 bg-gray-50">
                 <div class="flex justify-center gap-1">
                     <Link v-for="link in bureaux.links" :key="link.label"
                           :href="link.url || '#'"
-                          :class="link.active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'"
-                          class="px-3 py-1 rounded text-sm"
+                          :class="link.active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                          class="px-3 py-1.5 border rounded-md text-sm transition-colors"
                           v-html="link.label">
                     </Link>
                 </div>
             </div>
         </div>
+
+        <!-- Tooltip téléporté hors du tableau, donc plus jamais coupé par overflow-hidden -->
+        <Teleport to="body">
+            <div v-if="tooltipVisible && tooltipData"
+                 :style="tooltipStyle"
+                 class="fixed w-64 bg-gray-900 text-white text-xs rounded-lg p-3 z-50 shadow-xl pointer-events-none">
+                <p class="font-semibold text-gray-200 mb-1 border-b border-gray-700 pb-1">Dernière réinitialisation</p>
+                <p class="italic text-gray-300 mb-2">"{{ tooltipData.reason }}"</p>
+                <p class="text-gray-400 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    {{ tooltipData.created_at }}
+                </p>
+                <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>

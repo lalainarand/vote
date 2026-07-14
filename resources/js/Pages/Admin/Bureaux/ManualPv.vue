@@ -7,7 +7,7 @@ const props = defineProps({
     bureau: Object,
     counters: Array,
     pv_values: Object,
-    system_ballots_count: Number, // 🆕 Reçu du backend
+    system_ballots_count: Number,
 })
 
 const form = useForm({
@@ -15,7 +15,6 @@ const form = useForm({
         vote_option_id: c.id,
         count: props.pv_values[c.id] ?? c.system_count,
     })),
-    // registered_voters et voters supprimés ✅
     ballots_found: props.bureau.statistics?.ballots_found ?? props.system_ballots_count,
     note: '',
     mark_anomaly: false,
@@ -26,14 +25,27 @@ const toInt = (v) => {
     return Number.isNaN(n) ? 0 : n
 }
 
-// Map rapide des types pour les calculs
+// 🆕 Détermine si l'enregistrement est autorisé (interdit en pending ou counting)
+const canSave = computed(() => {
+    return !['pending', 'counting'].includes(props.bureau.status)
+})
+
+// 🆕 Pour le message d'information
+const statusLabel = {
+    pending:   'En attente',
+    counting:  'Comptage',
+    pv_entry:  'Saisie PV',
+    pv_admin:  'PV Admin',
+    validated: 'Validé',
+    anomaly:   'Anomalie',
+}
+
 const countersMap = computed(() => {
     const map = {}
     props.counters.forEach(c => { map[c.id] = c.type })
     return map
 })
 
-// Totaux calculés en temps réel
 const totalVoixCandidats = computed(() =>
     form.pv_data.reduce((sum, p) => {
         return countersMap.value[p.vote_option_id] === 'candidat' ? sum + toInt(p.count) : sum
@@ -53,13 +65,11 @@ const levelStyles = {
     warning: { box: 'bg-amber-50 border-amber-200', icon: 'text-amber-600', text: 'text-amber-800', symbol: '⚠' },
 }
 
-// ── Détail des contrôles (Adapté au scrutin plurinominal 1-9 voix) ──
 const controlDetails = computed(() => {
     const details = []
     const ballotsFound = toInt(form.ballots_found)
     const systemBallots = props.system_ballots_count
 
-    // C1 : Cohérence option par option
     const mismatches = form.pv_data
         .map((p, idx) => ({ p, counter: props.counters[idx] }))
         .filter(({ p, counter }) => toInt(p.count) !== counter.system_count)
@@ -68,43 +78,21 @@ const controlDetails = computed(() => {
         details.push({ key: 'c1', level: 'ok', title: 'C1 — Cohérence par option', message: 'Les saisies correspondent aux compteurs système.' })
     } else {
         const noms = mismatches.map(({ counter }) => counter.nom).join(', ')
-        details.push({ 
-            key: 'c1', level: 'warning', title: 'C1 — Cohérence par option', 
-            message: `Écart détecté pour ${mismatches.length} élément(s) : ${noms}. (L'admin peut outrepasser).` 
-        })
+        details.push({ key: 'c1', level: 'warning', title: 'C1 — Cohérence par option', message: `Écart détecté pour ${mismatches.length} élément(s) : ${noms}.` })
     }
 
-    // C2 : Plafond de voix (Max 9 voix par bulletin)
-    // const maxVoixPossibles = ballotsFound * 9
-    // if (totalVoixCandidats.value > maxVoixPossibles) {
-    //     details.push({
-    //         key: 'c2', level: 'error', title: 'C2 — Plafond de voix',
-    //         message: `Le total des voix (${totalVoixCandidats.value}) dépasse le maximum théorique (${maxVoixPossibles} voix pour ${ballotsFound} bulletins × 9).`
-    //     })
-    // } else {
-    //     details.push({ key: 'c2', level: 'ok', title: 'C2 — Plafond de voix', message: `Le total des voix est cohérent (max autorisé : ${maxVoixPossibles}).` })
-    // }
-
-    // C3 : Plancher de voix (Min 1 voix par bulletin valable)
     const bulletinsValables = Math.max(0, ballotsFound - totalBlancsNuls.value)
     if (totalVoixCandidats.value < bulletinsValables) {
-        details.push({
-            key: 'c3', level: 'error', title: 'C3 — Plancher de voix',
-            message: `Le total des voix (${totalVoixCandidats.value}) est inférieur au nombre de bulletins valables (${bulletinsValables}).`
-        })
+        details.push({ key: 'c3', level: 'error', title: 'C3 — Plancher de voix', message: `Le total des voix (${totalVoixCandidats.value}) est inférieur au nombre de bulletins valables (${bulletinsValables}).` })
     } else {
         details.push({ key: 'c3', level: 'ok', title: 'C3 — Plancher de voix', message: `Le total des voix couvre bien tous les bulletins valables.` })
     }
 
-    // C4 : Bulletins trouvés (Manuel) vs Système
     const ecartSysteme = Math.abs(ballotsFound - systemBallots)
     if (ecartSysteme === 0) {
         details.push({ key: 'c4', level: 'ok', title: 'C4 — Cohérence des bulletins', message: `Le nombre de bulletins trouvés (${ballotsFound}) correspond au comptage système.` })
     } else {
-        details.push({
-            key: 'c4', level: 'warning', title: 'C4 — Cohérence des bulletins',
-            message: `Écart de ${ecartSysteme} bulletin(s) entre la saisie manuelle (${ballotsFound}) et le système (${systemBallots}).`
-        })
+        details.push({ key: 'c4', level: 'warning', title: 'C4 — Cohérence des bulletins', message: `Écart de ${ecartSysteme} bulletin(s) entre la saisie manuelle (${ballotsFound}) et le système (${systemBallots}).` })
     }
 
     return details
@@ -114,8 +102,11 @@ const hasCriticalError = computed(() => controlDetails.value.some(d => d.level =
 const hasWarning = computed(() => controlDetails.value.some(d => d.level === 'warning'))
 
 const submit = (forceAnomaly = false) => {
+    // 🛡️ Sécurité supplémentaire : empêcher l'envoi si le statut ne le permet pas
+    if (!canSave.value) return 
+    
     form.mark_anomaly = forceAnomaly
-    form.post(`/admin/bureaux/${props.bureau.id}/pv-manuel`) // Adaptez l'URL si nécessaire
+    form.post(`/admin/bureaux/${props.bureau.id}/pv-manuel`)
 }
 </script>
 
@@ -233,7 +224,7 @@ const submit = (forceAnomaly = false) => {
                     </p>
                 </div>
 
-                <!-- Note / Motif -->
+                               <!-- Note / Motif -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Note / Motif de saisie manuelle</label>
                     <textarea v-model="form.note" rows="3"
@@ -241,26 +232,41 @@ const submit = (forceAnomaly = false) => {
                               placeholder="Expliquez la raison de cette saisie manuelle ou de l'écart..."></textarea>
                 </div>
 
+                <!-- 🆕 Message d'information si le bureau est encore en comptage -->
+                <div v-if="!canSave" class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                    <svg class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-blue-900">Saisie du PV indisponible pour le moment</p>
+                        <p class="text-sm text-blue-700 mt-1">
+                            Ce bureau est actuellement en phase de <strong>{{ statusLabel[bureau.status] || bureau.status }}</strong>. 
+                            Vous pouvez consulter les données en temps réel, mais l'enregistrement du PV sera activé une fois le comptage terminé.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Actions -->
                 <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-100">
                     <button type="submit"
-                            :disabled="form.processing"
+                            :disabled="form.processing || !canSave"
                             class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                         Enregistrer le PV
                     </button>
                     
                     <button type="button"
                             @click="submit(true)"
-                            :disabled="form.processing"
+                            :disabled="form.processing || !canSave"
                             class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                         Marquer anomalie et enregistrer
                     </button>
                     
-                     <Link href="/admin/bureaux"
-                          class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-medium">
-                        Annuler
+                    <Link href="/admin/bureaux"
+                          class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-medium transition-colors">
+                        Retour
                     </Link>
                 </div>
+
             </form>
         </div>
     </AuthenticatedLayout>
