@@ -9,7 +9,7 @@ class BulletinLog extends Model
 {
     use HasFactory;
 
-    public $timestamps = false; 
+    public $timestamps = false;
 
     protected $fillable = [
         'bureau_vote_id',
@@ -17,10 +17,10 @@ class BulletinLog extends Model
         'action',
         'quantity',
         'is_manuel',
-        'is_restored',
+        'is_reset',     
+        'is_restored',  
         'created_at',
     ];
-
     protected $casts = [
         'created_at' => 'datetime',
         'is_manuel'  => 'boolean',

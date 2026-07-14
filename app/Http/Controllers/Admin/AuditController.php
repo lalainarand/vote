@@ -17,8 +17,17 @@ class AuditController extends Controller
     public function index(Request $request)
     {
         $query = VoteLog::with(['bureau', 'voteOption', 'user'])
+            //EXCLUSION DES LOGS DE RESET / RESTORE
+            // On garde uniquement les vrais votes (is_reset = false ET is_restored = false)
+            ->where(function ($q) {
+                $q->whereNull('is_reset')->orWhere('is_reset', false);
+            })
+            ->where(function ($q) {
+                $q->whereNull('is_restored')->orWhere('is_restored', false);
+            })
             ->orderBy('created_at', 'desc');
 
+        // ── Filtres existants ──────────────────────────────────────────────
         if ($request->filled('bureau_id')) {
             $query->where('bureau_vote_id', $request->bureau_id);
         }
@@ -67,8 +76,16 @@ class AuditController extends Controller
     public function bulletins(Request $request)
     {
         $query = BulletinLog::with(['bureau', 'user'])
+            //EXCLUSION DES LOGS DE RESET / RESTORE (Bulletins)
+            ->where(function ($q) {
+                $q->whereNull('is_reset')->orWhere('is_reset', false);
+            })
+            ->where(function ($q) {
+                $q->whereNull('is_restored')->orWhere('is_restored', false);
+            })
             ->orderBy('created_at', 'desc');
 
+        // ── Filtres existants ──────────────────────────────────────────────
         if ($request->filled('bureau_id')) {
             $query->where('bureau_vote_id', $request->bureau_id);
         }

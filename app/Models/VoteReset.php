@@ -16,13 +16,14 @@ class VoteReset extends Model
         'user_id',
         'snapshot',
         'reason',
-        'created_at',
         'restored_at',
+        'created_at',
     ];
 
     protected $casts = [
         'snapshot'   => 'array',
         'created_at' => 'datetime',
+        'restored_at' => 'datetime',
     ];
 
     public function bureau()

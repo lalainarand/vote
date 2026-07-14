@@ -426,6 +426,7 @@ class CountingController extends Controller
                     'action'         => $bulletinCount > 0 ? '-1' : '+1',
                     'quantity'       => abs($bulletinCount),
                     'is_manuel'      => true,
+                    'is_reset'       => true,
                     'created_at'     => now(),
                 ]);
             }
@@ -464,7 +465,7 @@ class CountingController extends Controller
         $isCounting = in_array($bureau->status, ['pending', 'counting', 'anomaly']);
 
         DB::transaction(function () use ($bureau, $user, $snapshot, $isCounting, $voteReset) {
-            
+
             // ── SCÉNARIO 1 : Nous sommes en comptage → On remet d'abord à 0 ──
             if ($isCounting) {
                 // 1a. Reset des candidats
@@ -542,8 +543,8 @@ class CountingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $isCounting 
-                ? 'Compteur remis à zéro et données du snapshot réactivées avec succès.' 
+            'message' => $isCounting
+                ? 'Compteur remis à zéro et données du snapshot réactivées avec succès.'
                 : 'Données du snapshot réactivées avec succès (mode correction).',
             'new_status' => $isCounting ? $bureau->status : $bureau->status,
         ]);
