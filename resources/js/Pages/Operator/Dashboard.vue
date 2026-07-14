@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import GeometricVotes from '@/Components/GeometricVotes.vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
+import axios from 'axios'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
@@ -11,6 +12,10 @@ const props = defineProps({
     statistics: Object,
     error: String,
     total_procuration: Number,
+    bulletin_count: {
+        type: Number,
+        default: 0,
+    },
     bulletin_images: {
         type: Array,
         default: () => [],
@@ -60,11 +65,55 @@ const prevZoom = () => {
     zoomIndex.value = (zoomIndex.value - 1 + props.bulletin_images.length) % props.bulletin_images.length
 }
 
+// ── Réinitialisation du comptage ────────────────────────────────────────────
+const showResetModal = ref(false)
+const resetReason = ref('')
+const resetLoading = ref(false)
+const resetError = ref(null)
+const resetConfirmText = ref('') // sécurité supplémentaire : taper "RESET" pour confirmer
+
+const openResetModal = () => {
+    resetReason.value = ''
+    resetConfirmText.value = ''
+    resetError.value = null
+    showResetModal.value = true
+}
+
+const closeResetModal = () => {
+    showResetModal.value = false
+}
+
+const submitReset = async () => {
+    if (resetConfirmText.value.trim().toUpperCase() !== 'RESET') {
+        resetError.value = 'Tapez RESET pour confirmer.'
+        return
+    }
+
+    resetLoading.value = true
+    resetError.value = null
+
+    try {
+        await axios.post('/operator/comptage/reset', {
+            reason: resetReason.value || null,
+        })
+
+        closeResetModal()
+        // Recharge les données de la page (compteurs remis à zéro, etc.)
+        router.reload()
+    } catch (e) {
+        resetError.value = e.response?.data?.error || 'Erreur lors de la réinitialisation.'
+    } finally {
+        resetLoading.value = false
+    }
+}
+
 // Fermer les modals avec la touche Echap (écoute sur window, seule façon fiable)
 const handleKeydown = (e) => {
     if (e.key === 'Escape') {
         if (zoomOpen.value) {
             closeZoom()
+        } else if (showResetModal.value) {
+            closeResetModal()
         } else if (showModal.value) {
             showModal.value = false
         }
@@ -106,18 +155,31 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 
             <!-- Compteurs en temps réel -->
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6">
-                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
                     <h2 class="font-semibold text-gray-800">Comptage en cours</h2>
-                    <!-- BOUTON POUR OUVRIR LE MODAL GÉOMÉTRIQUE -->
-                    <button
-                        @click="showModal = true"
-                        class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                        </svg>
-                        Vue géométrique
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <!-- BOUTON POUR OUVRIR LE MODAL GÉOMÉTRIQUE -->
+                        <button
+                            @click="showModal = true"
+                            class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                            </svg>
+                            Vue géométrique
+                        </button>
+
+                        <!-- BOUTON RÉINITIALISER LE COMPTAGE -->
+                        <button
+                            @click="openResetModal"
+                            class="text-sm bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            Réinitialiser le comptage
+                        </button>
+                    </div>
                 </div>
                 <div class="p-6">
     <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
@@ -145,6 +207,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
         <div v-if="total_procuration > 0">
             <span class="text-sm text-purple-600">Dont procurations : </span>
             <span class="text-lg font-bold text-purple-700">{{ total_procuration }}</span>
+        </div>
+        <div>
+            <span class="text-sm text-amber-600">Bulletins dépouillés : </span>
+            <span class="text-lg font-bold text-amber-700">{{ bulletin_count }}</span>
         </div>
     </div>
 </div>
@@ -285,6 +351,72 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                            class="text-blue-300 hover:text-blue-200 underline">
                             Télécharger
                         </a>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ══ CONFIRMATION — Réinitialiser le comptage ══════════════════ -->
+        <Teleport to="body">
+            <div v-if="showResetModal"
+                 @click.self="closeResetModal"
+                 class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-8.25 3.75h.008v.008h-.008v-.008z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-base font-bold text-gray-900">Réinitialiser le comptage</h3>
+                    </div>
+
+                    <p class="text-sm text-gray-600 mb-1">
+                        Tous les compteurs (candidats + bulletins) de <strong>{{ bureau?.nom }}</strong> seront remis à zéro.
+                        Vous pourrez ressaisir les votes depuis le début.
+                    </p>
+                    <p class="text-xs text-gray-400 mb-4">
+                        Rien n'est supprimé : l'ancien comptage reste conservé dans le journal d'audit.
+                    </p>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Raison (optionnel)</label>
+                    <textarea
+                        v-model="resetReason"
+                        rows="2"
+                        placeholder="Ex: erreur de comptage constatée, double-clic massif..."
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4 resize-none
+                               focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    ></textarea>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Tapez <span class="font-mono font-bold text-red-600">RESET</span> pour confirmer
+                    </label>
+                    <input
+                        v-model="resetConfirmText"
+                        type="text"
+                        placeholder="RESET"
+                        @keyup.enter="submitReset"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono
+                               focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                    <p v-if="resetError" class="text-sm text-red-600 mt-1.5">{{ resetError }}</p>
+
+                    <div class="flex gap-2 mt-5">
+                        <button
+                            @click="submitReset"
+                            :disabled="resetLoading || resetConfirmText.trim().toUpperCase() !== 'RESET'"
+                            class="flex-1 bg-red-600 hover:bg-red-700 active:scale-95
+                                   disabled:opacity-50 disabled:cursor-not-allowed
+                                   text-white font-bold py-2.5 rounded-lg text-sm transition-all duration-100"
+                        >
+                            {{ resetLoading ? 'Réinitialisation...' : 'Confirmer la réinitialisation' }}
+                        </button>
+                        <button
+                            @click="closeResetModal"
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg text-sm"
+                        >
+                            Annuler
+                        </button>
                     </div>
                 </div>
             </div>

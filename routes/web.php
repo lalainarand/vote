@@ -68,8 +68,9 @@ Route::middleware(['auth', 'role:operator'])->prefix('operator')->name('operator
         ->name('comptage.bulletin');
     Route::post('comptage/bulletin-manuel', [CountingController::class, 'bulletinVoteManuel'])
         ->name('comptage.bulletin-manuel');
-        Route::post('/comptage/upload-bulletin-image', [CountingController::class, 'uploadBulletinImage'])
-    ->name('operator.comptage.upload-bulletin-image');
+    Route::post('/comptage/upload-bulletin-image', [CountingController::class, 'uploadBulletinImage'])
+        ->name('operator.comptage.upload-bulletin-image');
+    Route::post('/comptage/reset', [CountingController::class, 'resetVotes'])->name('comptage.reset');
 
     // Vérification PV
     Route::get('pv', [PvEntryController::class, 'index'])->name('pv.index');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operator;
 
 use App\Http\Controllers\Controller;
 use App\Models\BulletinImage;
+use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
@@ -23,36 +24,44 @@ class DashboardController extends Controller
             ]);
         }
 
-        // Compteurs en temps réel (somme des logs, procurations incluses)
-        $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($option) use ($bureau) {
-            $plus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $option->id)
-                ->where('action', '+1')
-                ->sum('quantity');
-            $minus = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $option->id)
-                ->where('action', '-1')
-                ->sum('quantity');
-            $procuration = VoteLog::where('bureau_vote_id', $bureau->id)
-                ->where('vote_option_id', $option->id)
-                ->where('is_procuration', true)
-                ->sum('quantity');
+        // 🚀 OPTIMISATION & CORRECTION : Calcul précis incluant l'action (+1 / -1)
+        $counters = VoteOption::orderBy('ordre_affichage')
+            ->select('id', 'nom', 'type', 'photo', 'ordre_affichage')
+            ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->withSum(['voteLogs as minus_sum' => fn($q) => $q->where('action', '-1')->where('bureau_vote_id', $bureau->id)], 'quantity')
+            // NOUVEAU : On sépare les procurations +1 et -1 pour pouvoir les soustraire
+            ->withSum(['voteLogs as proc_plus_sum' => fn($q) => $q->where('action', '+1')->where('is_procuration', true)->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->withSum(['voteLogs as proc_minus_sum' => fn($q) => $q->where('action', '-1')->where('is_procuration', true)->where('bureau_vote_id', $bureau->id)], 'quantity')
+            ->get()
+            ->map(function ($opt) {
+                return [
+                    'id'              => $opt->id,
+                    'nom'             => $opt->nom,
+                    'type'            => $opt->type,
+                    'photo'           => $opt->photo,
+                    'ordre_affichage' => $opt->ordre_affichage,
+                    'count'           => ($opt->plus_sum ?? 0) - ($opt->minus_sum ?? 0),
+                    // La vraie formule : (Procurations ajoutées) - (Procurations retirées par reset)
+                    'procuration'     => (int)(($opt->proc_plus_sum ?? 0) - ($opt->proc_minus_sum ?? 0)),
+                ];
+            });
 
-            return [
-                'id'               => $option->id,
-                'nom'              => $option->nom,
-                'type'             => $option->type,
-                'photo'            => $option->photo,
-                'ordre_affichage'  => $option->ordre_affichage,
-                'count'            => $plus - $minus,
-                'procuration'      => (int) $procuration,
-            ];
-        });
-
-        // Total procurations pour ce bureau, toutes options confondues
-        $totalProcuration = VoteLog::where('bureau_vote_id', $bureau->id)
+        // Total procurations pour ce bureau, toutes options confondues (CORRIGÉ)
+        $totalProcPlus = VoteLog::where('bureau_vote_id', $bureau->id)
+            ->where('action', '+1')
             ->where('is_procuration', true)
             ->sum('quantity');
+
+        $totalProcMinus = VoteLog::where('bureau_vote_id', $bureau->id)
+            ->where('action', '-1')
+            ->where('is_procuration', true)
+            ->sum('quantity');
+
+        $totalProcuration = $totalProcPlus - $totalProcMinus;
+
+        // Compteur système de bulletins dépouillés
+        // (Assurez-vous que currentCountForBureau est bien défini dans votre modèle, sinon utilisez la méthode privée du CountingController)
+        $bulletinCount = BulletinLog::currentCountForBureau($bureau->id);
 
         // Résultats PV (si saisis)
         $pvResults = BureauResult::where('bureau_vote_id', $bureau->id)
@@ -71,7 +80,7 @@ class DashboardController extends Controller
             'ballots_found' => $bureau->statistics->ballots_found,
         ] : null;
 
-        // Photos du compteur/bulletins de ce bureau (les plus récentes en premier)
+        // Photos du compteur/bulletins de ce bureau
         $bulletinImages = BulletinImage::where('bureau_vote_id', $bureau->id)
             ->orderByDesc('taken_at')
             ->get()
@@ -87,7 +96,8 @@ class DashboardController extends Controller
             'counters' => $counters,
             'pv_results' => $pvResults,
             'statistics' => $stats,
-            'total_procuration' => (int) $totalProcuration,
+            'total_procuration' => (int) $totalProcuration, // Sera maintenant bien à 0 après un reset
+            'bulletin_count' => $bulletinCount,
             'bulletin_images' => $bulletinImages,
         ]);
     }

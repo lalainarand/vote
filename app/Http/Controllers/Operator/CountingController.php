@@ -7,10 +7,10 @@ use App\Models\BulletinImage;
 use App\Models\BulletinLog;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
+use App\Models\VoteReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class CountingController extends Controller
@@ -335,5 +335,114 @@ class CountingController extends Controller
             ->sum('quantity');
 
         return $plus - $minus;
+    }
+
+    public function resetVotes(Request $request)
+    {
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:255',
+        ]);
+
+        $user = auth()->user();
+        $bureau = $user->bureauVote;
+
+        if (!$bureau) {
+            return response()->json(['error' => 'Aucun bureau assigné'], 403);
+        }
+
+        if (!in_array($bureau->status, ['pending', 'counting', 'anomaly'])) {
+            return response()->json([
+                'error' => 'Le comptage ne peut plus être réinitialisé une fois le PV saisi.',
+            ], 403);
+        }
+
+        $snapshot = ['candidates' => [], 'bulletin_count' => 0];
+
+        DB::transaction(function () use ($bureau, $user, $validated, &$snapshot) {
+            // 1. Compenser chaque option candidat à zéro, en séparant normal / procuration
+            $options = VoteOption::all();
+            foreach ($options as $opt) {
+                $normalPlus = VoteLog::where('bureau_vote_id', $bureau->id)
+                    ->where('vote_option_id', $opt->id)
+                    ->where('action', '+1')
+                    ->where('is_procuration', false)
+                    ->sum('quantity');
+                $normalMinus = VoteLog::where('bureau_vote_id', $bureau->id)
+                    ->where('vote_option_id', $opt->id)
+                    ->where('action', '-1')
+                    ->where('is_procuration', false)
+                    ->sum('quantity');
+                $normalCount = $normalPlus - $normalMinus;
+
+                $procPlus = VoteLog::where('bureau_vote_id', $bureau->id)
+                    ->where('vote_option_id', $opt->id)
+                    ->where('action', '+1')
+                    ->where('is_procuration', true)
+                    ->sum('quantity');
+                $procMinus = VoteLog::where('bureau_vote_id', $bureau->id)
+                    ->where('vote_option_id', $opt->id)
+                    ->where('action', '-1')
+                    ->where('is_procuration', true)
+                    ->sum('quantity');
+                $procCount = $procPlus - $procMinus;
+
+                $snapshot['candidates'][$opt->id] = $normalCount + $procCount;
+
+                if ($normalCount !== 0) {
+                    VoteLog::create([
+                        'bureau_vote_id' => $bureau->id,
+                        'vote_option_id' => $opt->id,
+                        'user_id'        => $user->id,
+                        'action'         => $normalCount > 0 ? '-1' : '+1',
+                        'quantity'       => abs($normalCount),
+                        'is_procuration' => false,
+                        'is_reset'       => true,
+                        'created_at'     => now(),
+                    ]);
+                }
+
+                if ($procCount !== 0) {
+                    VoteLog::create([
+                        'bureau_vote_id' => $bureau->id,
+                        'vote_option_id' => $opt->id,
+                        'user_id'        => $user->id,
+                        'action'         => $procCount > 0 ? '-1' : '+1',
+                        'quantity'       => abs($procCount),
+                        'is_procuration' => true,
+                        'is_reset'       => true,
+                        'created_at'     => now(),
+                    ]);
+                }
+            }
+
+            // 2. Compenser le compteur de bulletins à zéro (inchangé)
+            $bulletinCount = BulletinLog::currentCountForBureau($bureau->id);
+            $snapshot['bulletin_count'] = $bulletinCount;
+
+            if ($bulletinCount !== 0) {
+                BulletinLog::create([
+                    'bureau_vote_id' => $bureau->id,
+                    'user_id'        => $user->id,
+                    'action'         => $bulletinCount > 0 ? '-1' : '+1',
+                    'quantity'       => abs($bulletinCount),
+                    'is_manuel'      => true,
+                    'created_at'     => now(),
+                ]);
+            }
+
+            // 3. Snapshot de l'ancien état, pour audit/traçabilité (photos non touchées)
+            VoteReset::create([
+                'bureau_vote_id' => $bureau->id,
+                'user_id'        => $user->id,
+                'snapshot'       => $snapshot,
+                'reason'         => $validated['reason'] ?? null,
+                'created_at'     => now(),
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comptage réinitialisé. Vous pouvez ressaisir les votes.',
+        ]);
     }
 }

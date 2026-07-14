@@ -9,7 +9,7 @@ class BulletinLog extends Model
 {
     use HasFactory;
 
-    public $timestamps = false; // on gère created_at manuellement, pas de updated_at
+    public $timestamps = false; 
 
     protected $fillable = [
         'bureau_vote_id',
@@ -25,7 +25,6 @@ class BulletinLog extends Model
         'is_manuel'  => 'boolean',
     ];
 
-    // Renommé bureauVote() -> bureau() pour rester cohérent avec VoteLog::bureau()
     public function bureau()
     {
         return $this->belongsTo(BureauVote::class, 'bureau_vote_id');
@@ -34,5 +33,22 @@ class BulletinLog extends Model
     public function user()
     {
         return $this->belongsTo(\App\Models\User::class);
+    }
+
+    /**
+     * Compteur système courant de bulletins dépouillés pour un bureau.
+     * Réutilisable partout (CountingController, PvController, etc.)
+     * au lieu de dupliquer le calcul +1/-1 dans chaque contrôleur.
+     */
+    public static function currentCountForBureau(int $bureauId): int
+    {
+        $plus = static::where('bureau_vote_id', $bureauId)
+            ->where('action', '+1')
+            ->sum('quantity');
+        $minus = static::where('bureau_vote_id', $bureauId)
+            ->where('action', '-1')
+            ->sum('quantity');
+
+        return $plus - $minus;
     }
 }
