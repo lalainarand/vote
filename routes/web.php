@@ -36,6 +36,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::patch('bureaux/{bureau}/unlock', [BureauController::class, 'unlock'])->name('bureaux.unlock');
     Route::get('bureaux/{bureau}/pv-manuel', [BureauController::class, 'manualPv'])->name('bureaux.pv-manuel');
     Route::post('bureaux/{bureau}/pv-manuel', [BureauController::class, 'storeManualPv'])->name('bureaux.pv-manuel.store');
+    Route::get('/bureaux/{bureau}/photos', [BureauController::class, 'photos'])->name('admin.bureaux.photos');
 
     // Gestion candidats
     Route::resource('candidats', CandidateController::class);

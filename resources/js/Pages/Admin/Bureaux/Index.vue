@@ -1,7 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
 
 const props = defineProps({
     bureaux: Object,
@@ -79,6 +78,7 @@ const deleteBureau = (id) => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Opérateur</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photos</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
@@ -95,7 +95,19 @@ const deleteBureau = (id) => {
                                 {{ statusLabel[bureau.status]?.label ?? bureau.status }}
                             </span>
                         </td>
-                       
+                        <td class="px-4 py-3 text-center">
+                            <Link :href="`/admin/bureaux/${bureau.id}/photos`"
+                                  class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors"
+                                  :class="bureau.bulletin_images_count > 0
+                                    ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                    <circle cx="12" cy="13" r="3"/>
+                                </svg>
+                                {{ bureau.bulletin_images_count }}
+                            </Link>
+                        </td>
                         <td class="px-4 py-3 text-right space-x-2">
                             <Link v-if="bureau.status ==='validated'" :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
                                   class="text-purple-600 hover:text-purple-800 text-sm font-medium">

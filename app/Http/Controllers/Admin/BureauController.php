@@ -20,7 +20,8 @@ class BureauController extends Controller
      */
     public function index(Request $request)
     {
-        $query = BureauVote::with(['users', 'statistics']);
+        $query = BureauVote::with(['users', 'statistics'])
+            ->withCount('bulletinImages'); // ← ajouté : bureau.bulletin_images_count
 
         // Filtre par statut
         if ($request->filled('status')) {
@@ -37,6 +38,31 @@ class BureauController extends Controller
         return Inertia::render('Admin/Bureaux/Index', [
             'bureaux' => $bureaux,
             'filters' => $request->only(['status', 'no_pv']),
+        ]);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Nouvelle méthode : page photos d'un bureau (réutilisable, ne
+    // nécessite que l'ID du bureau)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function photos(BureauVote $bureau)
+    {
+        $images = $bureau->bulletinImages()
+            ->with('user:id,name')
+            ->orderByDesc('taken_at')
+            ->get()
+            ->map(fn($img) => [
+                'id'       => $img->id,
+                'url'      => $img->url,
+                'filename' => $img->filename,
+                'taken_at' => $img->taken_at->format('d/m/Y H:i'),
+                'user'     => $img->user?->name,
+            ]);
+
+        return Inertia::render('Admin/Bureaux/Photos', [
+            'bureau' => $bureau->only(['id', 'code', 'nom', 'status']),
+            'images' => $images,
         ]);
     }
 
