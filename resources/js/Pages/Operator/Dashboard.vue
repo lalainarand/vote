@@ -11,6 +11,8 @@ const props = defineProps({
     pv_results: Array,
     statistics: Object,
     error: String,
+    reset_count: { type: Number, default: 0 },
+    reset_history: { type: Array, default: () => [] },
     total_procuration: Number,
     bulletin_count: {
         type: Number,
@@ -23,6 +25,7 @@ const props = defineProps({
 })
 
 const showModal = ref(false)
+const showResetModalGet = ref(false)
 
 const statusLabel = {
     pending:   { label: 'En attente',  cls: 'bg-gray-100 text-gray-600' },
@@ -152,6 +155,38 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                     </span>
                 </div>
             </div>
+
+            <!-- ── Carte d'information sur les Réinitialisations ─────────────────── -->
+                <div v-if="reset_count > 0" 
+                    @click="showResetModalGet = true"
+                    class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 cursor-pointer hover:bg-amber-100 transition-colors group">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-amber-100 p-2 rounded-full text-amber-600 group-hover:bg-amber-200 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-amber-900">Historique des réinitialisations</h3>
+                                <p class="text-sm text-amber-700">
+                                    <span class="font-bold">{{ reset_count }}</span> réinitialisation(s) effectuée(s) sur ce bureau.
+                                </p>
+                            </div>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400 group-hover:text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Message discret si aucun reset (optionnel, pour montrer que le système est actif) -->
+                    <div v-else class="mb-6 bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="text-sm font-medium text-green-800">Aucune réinitialisation n'a été effectuée sur ce bureau.</span>
+                    </div>
 
             <!-- Compteurs en temps réel -->
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6">
@@ -416,6 +451,78 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                             class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg text-sm"
                         >
                             Annuler
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ══ MODAL : DÉTAIL DES RÉINITIALISATIONS ═══════════════════════════ -->
+        <Teleport to="body">
+            <div v-if="showResetModalGet" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" @click.self="showResetModalGet = false">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+                    
+                    <!-- Header du modal -->
+                    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-amber-50 rounded-t-2xl">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-amber-100 p-2 rounded-full text-amber-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">Journal des réinitialisations</h3>
+                                <p class="text-sm text-gray-500">Bureau : {{ bureau.nom }}</p>
+                            </div>
+                        </div>
+                        <button @click="showResetModalGet = false" class="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-2 rounded-full transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Contenu scrollable -->
+                    <div class="p-6 overflow-y-auto flex-1">
+                        <div v-if="reset_history.length === 0" class="text-center text-gray-500 py-8">
+                            Aucune donnée disponible.
+                        </div>
+
+                        <div v-else class="space-y-4">
+                            <div v-for="reset in reset_history" :key="reset.id" class="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-colors">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-1 rounded">
+                                            {{ reset.user_name }}
+                                        </span>
+                                        <span class="text-xs text-gray-500 flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            {{ reset.created_at }}
+                                        </span>
+                                    </div>
+                                    <span class="text-sm font-bold text-red-600 bg-red-50 px-2 py-1 rounded">
+                                        -{{ reset.total_votes_annules }} voix
+                                    </span>
+                                </div>
+                                
+                                <div class="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r">
+                                    <p class="text-xs font-semibold text-amber-800 uppercase mb-1">Motif de la réinitialisation</p>
+                                    <p class="text-sm text-gray-800 italic">
+                                        "{{ reset.reason }}"
+                                    </p>
+                                </div>
+
+                                <div class="mt-2 text-xs text-gray-500 text-right">
+                                    Bulletins dépouillés remis à zéro : <span class="font-mono font-semibold">{{ reset.bulletin_count_annule }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer du modal -->
+                    <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end">
+                        <button @click="showResetModalGet = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg font-medium transition-colors">
+                            Fermer
                         </button>
                     </div>
                 </div>

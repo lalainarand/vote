@@ -8,6 +8,7 @@ use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
+use App\Models\VoteReset;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -24,7 +25,7 @@ class DashboardController extends Controller
             ]);
         }
 
-        // 🚀 OPTIMISATION & CORRECTION : Calcul précis incluant l'action (+1 / -1)
+        //OPTIMISATION & CORRECTION : Calcul précis incluant l'action (+1 / -1)
         $counters = VoteOption::orderBy('ordre_affichage')
             ->select('id', 'nom', 'type', 'photo', 'ordre_affichage')
             ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')->where('bureau_vote_id', $bureau->id)], 'quantity')
@@ -91,14 +92,40 @@ class DashboardController extends Controller
                 'taken_at' => $img->taken_at->format('d/m/Y H:i'),
             ]);
 
+        //Récupération des données de réinitialisation (Reset)
+        $resetCount = VoteReset::where('bureau_vote_id', $bureau->id)->count();
+
+        $resetHistory = VoteReset::where('bureau_vote_id', $bureau->id)
+            ->with('user:id,name') // Récupère le nom de l'opérateur
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function ($r) {
+                // Calculer le total des votes annulés à partir du snapshot pour l'affichage
+                $totalVotesAnnules = 0;
+                if (isset($r->snapshot['candidates']) && is_array($r->snapshot['candidates'])) {
+                    $totalVotesAnnules = array_sum($r->snapshot['candidates']);
+                }
+
+                return [
+                    'id' => $r->id,
+                    'user_name' => $r->user->name ?? 'Utilisateur inconnu',
+                    'reason' => $r->reason ?: 'Aucun motif fourni',
+                    'created_at' => $r->created_at->format('d/m/Y à H:i'),
+                    'total_votes_annules' => $totalVotesAnnules,
+                    'bulletin_count_annule' => $r->snapshot['bulletin_count'] ?? 0,
+                ];
+            });
+
         return Inertia::render('Operator/Dashboard', [
             'bureau' => $bureau,
             'counters' => $counters,
             'pv_results' => $pvResults,
             'statistics' => $stats,
-            'total_procuration' => (int) $totalProcuration, // Sera maintenant bien à 0 après un reset
+            'total_procuration' => (int) $totalProcuration,
             'bulletin_count' => $bulletinCount,
             'bulletin_images' => $bulletinImages,
+            'reset_count' => $resetCount,
+            'reset_history' => $resetHistory,
         ]);
     }
 }
