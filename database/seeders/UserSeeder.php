@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
             [
                 'name'           => 'Administrateur',
                 'email'          => 'admin@eglise.mg',
-                'password'       => Hash::make('password987654321'),
+                'password'       => Hash::make('@#password987654321#'),
                 'bureau_vote_id' => null,
             ]
         );
@@ -50,7 +50,7 @@ class UserSeeder extends Seeder
                 [
                     'name'           => $op['name'],
                     'email'          => $op['email'],
-                    'password'       => Hash::make('password987654321'),
+                    'password'       => Hash::make('#password987654321#'),
                     'bureau_vote_id' => $bureau->id,
                 ]
             );

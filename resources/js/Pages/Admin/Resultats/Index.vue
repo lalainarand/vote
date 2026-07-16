@@ -12,6 +12,8 @@ const props = defineProps({
     validated_bureaux:             Number,
     total_bureaux:                 Number,
     source_breakdown:              Object,
+    status_counts:                 Object,
+    scope:                         String,
 })
 
 // Vue active : 'pv' ou 'system'
@@ -33,19 +35,83 @@ const getVotes = (r) =>
 const candidatesRanked = computed(() =>
     [...candidates.value].sort((a, b) => getVotes(b) - getVotes(a))
 )
+
+// Scope (tous les bureaux vs validés uniquement)
+const scopeLabel = computed(() =>
+    props.scope === 'validated' ? 'Bureaux validés uniquement' : 'Tous les bureaux (y compris en cours)'
+)
+
+const switchScope = (newScope) => {
+    router.get('/admin/resultats', { scope: newScope }, { preserveScroll: true, preserveState: true })
+}
+
+const statusLabels = {
+    pending:   'En attente',
+    counting:  'Comptage en cours',
+    anomaly:   'Anomalie',
+    validated: 'Validé',
+}
 </script>
 
-<template>
-    <AuthenticatedLayout>
-        <template #header>
+        <template>
+            <AuthenticatedLayout>
+            <template #header>
             <div class="flex items-center justify-between">
                 <h1 class="text-base font-semibold text-gray-800">Résultats globaux</h1>
-                <Link href="/admin/resultats/export"
-                      class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                    Exporter CSV
-                </Link>
+                <a :href="`/admin/resultats/export?scope=${scope}`"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+    Exporter Excel
+</a>
             </div>
         </template>
+
+        <!-- Bandeau statut global -->
+        <div class="mb-4 flex items-center justify-between rounded-lg border px-4 py-2.5"
+             :class="scope === 'validated'
+                ? 'bg-green-50 border-green-200'
+                : 'bg-amber-50 border-amber-200'">
+            <div class="flex items-center gap-2 text-sm">
+                <span class="w-2 h-2 rounded-full"
+                      :class="scope === 'validated' ? 'bg-green-500' : 'bg-amber-500'"></span>
+                <span class="font-medium" :class="scope === 'validated' ? 'text-green-800' : 'text-amber-800'">
+                    {{ scopeLabel }}
+                </span>
+                <span v-if="scope !== 'validated'" class="text-amber-700">
+                    — résultats provisoires, susceptibles d'évoluer
+                </span>
+            </div>
+
+            <div class="flex rounded-lg border border-white/60 overflow-hidden text-xs bg-white">
+                <button
+                    @click="switchScope('all')"
+                    class="px-3 py-1.5 font-medium transition-colors"
+                    :class="scope === 'all' ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'"
+                >
+                    Tous ({{ total_bureaux }})
+                </button>
+                <button
+                    @click="switchScope('validated')"
+                    class="px-3 py-1.5 font-medium transition-colors border-l border-gray-200"
+                    :class="scope === 'validated' ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'"
+                >
+                    Validés ({{ validated_bureaux }})
+                </button>
+            </div>
+        </div>
+
+        <!-- Détail des statuts -->
+        <div class="mb-6 flex flex-wrap gap-3 text-xs">
+            <span v-for="(count, status) in status_counts" :key="status"
+                  class="px-2.5 py-1 rounded-full font-medium"
+                  :class="{
+                      'bg-gray-100 text-gray-600':   status === 'pending',
+                      'bg-blue-100 text-blue-700':   status === 'counting',
+                      'bg-red-100 text-red-700':     status === 'anomaly',
+                      'bg-green-100 text-green-700': status === 'validated',
+                  }">
+                {{ statusLabels[status] || status }} : {{ count }}
+            </span>
+        </div>
 
         <!-- Stats -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -154,7 +220,9 @@ const candidatesRanked = computed(() =>
                     <tr v-for="(r, idx) in candidatesRanked" :key="r.id"
                         class="hover:bg-gray-50 transition-colors">
                         <td class="px-4 py-3 text-xs text-gray-400 font-mono">{{ idx + 1 }}</td>
-                        <td class="px-4 py-3 text-sm font-medium text-gray-800">{{ r.nom }}</td>
+                        <td class="px-4 py-3 text-sm font-medium text-gray-800">
+                            <span v-if="r.numero" class="text-gray-500 font-mono mr-1.5">N°{{ r.numero }}</span>- {{ r.nom }}
+                        </td>
                         <td class="px-4 py-3 text-right text-sm font-mono text-gray-400">
                             {{ r.system_count.toLocaleString('fr-FR') }}
                         </td>

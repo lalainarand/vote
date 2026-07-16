@@ -644,7 +644,7 @@ onUnmounted(() => {
 
             <!-- Compteur -->
             <div
-                class="text-xl font-black text-blue-600 tabular-nums transition-transform duration-150 mb-1.5"
+                class="text-4xl font-extrabold text-blue-600 tabular-nums transition-transform duration-150 mb-1.5"
                 :class="{ 'scale-110': animating[c.id] }"
             >
                 {{ counts[c.id] }}

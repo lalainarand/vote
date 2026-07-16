@@ -81,8 +81,9 @@ class DashboardController extends Controller
             'ballots_found' => $bureau->statistics->ballots_found,
         ] : null;
 
-        // Photos du compteur/bulletins de ce bureau
+        // Photos du compteur/bulletins de ce bureau (uniquement celles du comptage en cours)
         $bulletinImages = BulletinImage::where('bureau_vote_id', $bureau->id)
+            ->where('is_reset', false)
             ->orderByDesc('taken_at')
             ->get()
             ->map(fn($img) => [

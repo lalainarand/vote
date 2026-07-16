@@ -16,10 +16,12 @@ class BulletinImage extends Model
         'path',
         'filename',
         'taken_at',
+        'is_reset',
     ];
 
     protected $casts = [
         'taken_at' => 'datetime',
+        'is_reset' => 'boolean',
     ];
 
     public function bureauVote()
@@ -36,5 +38,14 @@ class BulletinImage extends Model
     public function getUrlAttribute(): string
     {
         return Storage::url($this->path);
+    }
+
+    /**
+     * Ne garde que les images encore valides (non réinitialisées).
+     * À utiliser partout où les images sont affichées : $bureau->bulletinImages()->active()->get()
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_reset', false);
     }
 }

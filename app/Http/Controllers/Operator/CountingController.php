@@ -356,7 +356,7 @@ class CountingController extends Controller
             ], 403);
         }
 
-        $snapshot = ['candidates' => [], 'bulletin_count' => 0];
+        $snapshot = ['candidates' => [], 'bulletin_count' => 0, 'bulletin_images' => []];
 
         DB::transaction(function () use ($bureau, $user, $validated, &$snapshot) {
             $options = VoteOption::all();
@@ -374,14 +374,12 @@ class CountingController extends Controller
 
                 // ── TRAITEMENT VOTES NORMAUX ──
                 if ($normalCount !== 0) {
-                    // 1. On marque les anciens logs comme "annulés" pour qu'ils disparaissent de l'audit
                     VoteLog::where('bureau_vote_id', $bureau->id)
                         ->where('vote_option_id', $opt->id)
                         ->where('is_procuration', false)
-                        ->where('is_reset', false) // On ne touche qu'aux logs encore valides
+                        ->where('is_reset', false)
                         ->update(['is_reset' => true]);
 
-                    // 2. On insère la compensation pour que le total mathématique reste à 0
                     VoteLog::create([
                         'bureau_vote_id' => $bureau->id,
                         'vote_option_id' => $opt->id,
@@ -415,17 +413,15 @@ class CountingController extends Controller
                 }
             }
 
-            // ── TRAITEMENT BULLETINS ──
+            // ── TRAITEMENT BULLETINS (compteur) ──
             $bulletinCount = BulletinLog::currentCountForBureau($bureau->id);
             $snapshot['bulletin_count'] = $bulletinCount;
 
             if ($bulletinCount !== 0) {
-                // 1. Marquer les anciens logs de bulletins
                 BulletinLog::where('bureau_vote_id', $bureau->id)
                     ->where('is_reset', false)
                     ->update(['is_reset' => true]);
 
-                // 2. Insérer la compensation
                 BulletinLog::create([
                     'bureau_vote_id' => $bureau->id,
                     'user_id'        => $user->id,
@@ -435,6 +431,24 @@ class CountingController extends Controller
                     'is_reset'       => true,
                     'created_at'     => now(),
                 ]);
+            }
+
+            // ── TRAITEMENT PHOTOS DU BULLETIN ──
+            // On ne supprime pas les fichiers : on marque les images comme réinitialisées
+            // pour qu'elles disparaissent de l'affichage courant tout en gardant l'historique.
+            $activeImages = BulletinImage::where('bureau_vote_id', $bureau->id)
+                ->where('is_reset', false)
+                ->get(['id', 'path', 'filename']);
+
+            if ($activeImages->isNotEmpty()) {
+                $snapshot['bulletin_images'] = $activeImages
+                    ->map(fn($img) => ['id' => $img->id, 'path' => $img->path, 'filename' => $img->filename])
+                    ->values()
+                    ->all();
+
+                BulletinImage::where('bureau_vote_id', $bureau->id)
+                    ->where('is_reset', false)
+                    ->update(['is_reset' => true]);
             }
 
             VoteReset::create([
@@ -448,7 +462,7 @@ class CountingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Comptage réinitialisé. Vous pouvez ressaisir les votes.',
+            'message' => 'Comptage réinitialisé. Vous pouvez ressaisir les votes et reprendre les photos du bulletin.',
         ]);
     }
 
@@ -466,19 +480,15 @@ class CountingController extends Controller
         }
 
         $snapshot = $voteReset->snapshot;
-
-        // Vérifie si nous sommes en phase de comptage active
         $isCounting = in_array($bureau->status, ['pending', 'counting', 'anomaly']);
 
         DB::transaction(function () use ($bureau, $user, $snapshot, $isCounting, $voteReset) {
 
             // ── ÉTAPE 1 : Annuler l'état actuel pour que l'audit reste propre ──
-            // (On ne le fait que si on est en comptage, comme demandé, pour écraser l'existant)
             if ($isCounting) {
                 // 1a. Annulation des candidats
                 $options = VoteOption::all();
                 foreach ($options as $opt) {
-                    // Calculer le total actuellement valide (is_reset = false ou null)
                     $plus = VoteLog::where('bureau_vote_id', $bureau->id)
                         ->where('vote_option_id', $opt->id)
                         ->where('action', '+1')
@@ -498,7 +508,6 @@ class CountingController extends Controller
                     $currentCount = $plus - $minus;
 
                     if ($currentCount !== 0) {
-                        // A. Marquer les logs valides actuels comme annulés
                         VoteLog::where('bureau_vote_id', $bureau->id)
                             ->where('vote_option_id', $opt->id)
                             ->where(function ($q) {
@@ -506,7 +515,6 @@ class CountingController extends Controller
                             })
                             ->update(['is_reset' => true]);
 
-                        // B. Insérer la compensation pour que le total DB retombe mathématiquement à 0
                         VoteLog::create([
                             'bureau_vote_id' => $bureau->id,
                             'vote_option_id' => $opt->id,
@@ -552,9 +560,18 @@ class CountingController extends Controller
                         'created_at'     => now(),
                     ]);
                 }
+
+                // 1c. Annulation des photos actuellement actives
+                // (on invalide tout ce qui est actif avant de réactiver le snapshot,
+                // pour n'avoir jamais deux jeux de photos actifs en même temps)
+                BulletinImage::where('bureau_vote_id', $bureau->id)
+                    ->where('is_reset', false)
+                    ->update(['is_reset' => true]);
             }
 
             // ── ÉTAPE 2 : Réactiver les valeurs du snapshot ──
+
+            // 2a. Candidats
             if (isset($snapshot['candidates']) && is_array($snapshot['candidates'])) {
                 foreach ($snapshot['candidates'] as $optionId => $count) {
                     if ($count > 0) {
@@ -565,13 +582,14 @@ class CountingController extends Controller
                             'action'         => '+1',
                             'quantity'       => $count,
                             'is_procuration' => false,
-                            'is_restored'    => true,  // Visible dans l'audit
+                            'is_restored'    => true,
                             'created_at'     => now(),
                         ]);
                     }
                 }
             }
 
+            // 2b. Bulletins (compteur)
             if (isset($snapshot['bulletin_count']) && $snapshot['bulletin_count'] > 0) {
                 BulletinLog::create([
                     'bureau_vote_id' => $bureau->id,
@@ -579,9 +597,24 @@ class CountingController extends Controller
                     'action'         => '+1',
                     'quantity'       => $snapshot['bulletin_count'],
                     'is_manuel'      => true,
-                    'is_restored'    => true,  // Visible dans l'audit
+                    'is_restored'    => true,
                     'created_at'     => now(),
                 ]);
+            }
+
+            // 2c. Photos du bulletin
+            // Les enregistrements et fichiers physiques existent toujours
+            // (resetVotes ne fait que marquer is_reset = true, sans rien supprimer).
+            // On les réactive donc simplement au lieu de les recréer.
+            if (isset($snapshot['bulletin_images']) && is_array($snapshot['bulletin_images']) && count($snapshot['bulletin_images']) > 0) {
+                $snapshotImageIds = collect($snapshot['bulletin_images'])->pluck('id')->all();
+
+                BulletinImage::where('bureau_vote_id', $bureau->id)
+                    ->whereIn('id', $snapshotImageIds)
+                    ->update([
+                        'is_reset'    => false,
+                        'is_restored' => true,
+                    ]);
             }
 
             // Marquer ce snapshot comme réactivé
@@ -591,7 +624,7 @@ class CountingController extends Controller
         return response()->json([
             'success' => true,
             'message' => $isCounting
-                ? 'Compteur remis à zéro et données du snapshot réactivées avec succès.'
+                ? 'Comptage, bulletins et photos réactivés avec succès.'
                 : 'Données du snapshot réactivées avec succès (mode correction additive).',
         ]);
     }

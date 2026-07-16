@@ -21,7 +21,8 @@ class BureauController extends Controller
     public function index(Request $request)
     {
         $query = BureauVote::with(['users', 'statistics'])
-            ->withCount('bulletinImages')
+            // Ne compte que les photos encore valides (non réinitialisées)
+            ->withCount(['bulletinImages' => fn($q) => $q->where('is_reset', false)])
 
             // 1. Compter le nombre total de réinitialisations
             ->withCount('voteResets')
@@ -83,6 +84,7 @@ class BureauController extends Controller
     public function photos(BureauVote $bureau)
     {
         $images = $bureau->bulletinImages()
+            ->where('is_reset', false)
             ->with('user:id,name')
             ->orderByDesc('taken_at')
             ->get()
