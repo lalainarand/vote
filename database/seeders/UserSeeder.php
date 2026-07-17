@@ -7,6 +7,8 @@ use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\BureauVote;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class UserSeeder extends Seeder
 {
@@ -18,7 +20,7 @@ class UserSeeder extends Seeder
             [
                 'name'           => 'Administrateur',
                 'email'          => 'admin@eglise.mg',
-                'password'       => Hash::make('@#password987654321#'),
+                'password'       => Hash::make('#password98765432101#'),
                 'bureau_vote_id' => null,
             ]
         );
@@ -37,24 +39,62 @@ class UserSeeder extends Seeder
             ['name' => 'Opérateur BV009', 'email' => 'op9@eglise.mg', 'code' => 'BV009'],
             ['name' => 'Opérateur BV0010', 'email' => 'op10@eglise.mg', 'code' => 'BV010'],
             ['name' => 'Opérateur BV0011', 'email' => 'op11@eglise.mg', 'code' => 'BV011'],
-            // ['name' => 'Opérateur BV0012', 'email' => 'op12@eglise.mg', 'code' => 'BV012'],
-            // ['name' => 'Opérateur BV0013', 'email' => 'op13@eglise.mg', 'code' => 'BV013'],
-
         ];
+
+        // On garde les mots de passe en clair uniquement le temps du seed,
+        // pour pouvoir les communiquer aux opérateurs (impossible à retrouver ensuite, ils ne sont stockés que hashés).
+        $credentials = [];
 
         foreach ($operators as $op) {
             $bureau = BureauVote::where('code', $op['code'])->first();
+
+            if (!$bureau) {
+                $this->command?->warn("Bureau introuvable pour le code {$op['code']}, opérateur {$op['email']} ignoré.");
+                continue;
+            }
+
+            // Mot de passe aléatoire et unique par opérateur (12 caractères, majuscules/minuscules/chiffres/symboles)
+            $plainPassword = Str::password(12);
 
             $user = User::updateOrCreate(
                 ['email' => $op['email']],
                 [
                     'name'           => $op['name'],
                     'email'          => $op['email'],
-                    'password'       => Hash::make('#password987654321#'),
+                    'password'       => Hash::make($plainPassword),
                     'bureau_vote_id' => $bureau->id,
                 ]
             );
             $user->assignRole('operator'); // ← Spatie
+
+            $credentials[] = [
+                'code'     => $op['code'],
+                'name'     => $op['name'],
+                'email'    => $op['email'],
+                'password' => $plainPassword,
+            ];
+        }
+
+        // Affichage dans la console (si lancé via artisan db:seed)
+        if ($this->command && !empty($credentials)) {
+            $this->command->table(
+                ['Bureau', 'Nom', 'Email', 'Mot de passe'],
+                collect($credentials)->map(fn ($c) => [$c['code'], $c['name'], $c['email'], $c['password']])->all()
+            );
+        }
+
+        // Sauvegarde dans un fichier privé pour transmission ultérieure aux opérateurs.
+        // ⚠️ Ne jamais committer ce fichier : il contient des mots de passe en clair.
+        if (!empty($credentials)) {
+            $lines = collect($credentials)
+                ->map(fn ($c) => "{$c['code']} | {$c['name']} | {$c['email']} | {$c['password']}")
+                ->implode(PHP_EOL);
+
+            $filename = 'seeders/operator-credentials-' . now()->format('Y-m-d_His') . '.txt';
+            Storage::disk('local')->put($filename, $lines);
+
+            $this->command?->info("Identifiants opérateurs sauvegardés dans storage/app/{$filename}");
+            $this->command?->warn('Pensez à supprimer ce fichier une fois les identifiants transmis, et à ne jamais le committer.');
         }
     }
 }

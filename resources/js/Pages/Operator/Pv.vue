@@ -47,6 +47,22 @@ const totalBlancsNuls = computed(() =>
     }, 0)
 )
 
+// ── Écarts compteur système / saisie manuelle ───────────────────────
+// Utilisés à la fois pour l'affichage des contrôles (C1/C4) et pour bloquer l'enregistrement.
+const optionMismatches = computed(() =>
+    form.pv_data
+        .map((p, idx) => ({ p, counter: props.counters[idx] }))
+        .filter(({ p, counter }) => toInt(p.count) !== counter.system_count)
+)
+
+const ballotsMismatch = computed(() =>
+    toInt(form.ballots_found) !== props.system_ballots_count
+)
+
+const hasCounterMismatch = computed(() =>
+    optionMismatches.value.length > 0 || ballotsMismatch.value
+)
+
 const levelStyles = {
     ok: { box: 'bg-green-50 border-green-200', icon: 'text-green-600', text: 'text-green-800', symbol: '✓' },
     error: { box: 'bg-red-50 border-red-200', icon: 'text-red-600', text: 'text-red-800', symbol: '✗' },
@@ -57,18 +73,13 @@ const levelStyles = {
 const controlDetails = computed(() => {
     const details = []
     const ballotsFound = toInt(form.ballots_found)
-    const systemBallots = props.system_ballots_count
 
-    // C1 : Cohérence candidat par candidat
-    const mismatches = form.pv_data
-        .map((p, idx) => ({ p, counter: props.counters[idx] }))
-        .filter(({ p, counter }) => toInt(p.count) !== counter.system_count)
-
-    if (mismatches.length === 0) {
+    // C1 : Cohérence candidat par candidat — bloquant
+    if (optionMismatches.value.length === 0) {
         details.push({ key: 'c1', level: 'ok', title: 'C1 — Cohérence par option', message: 'Les saisies correspondent aux compteurs système pour chaque option.' })
     } else {
-        const noms = mismatches.map(({ counter }) => counter.nom).join(', ')
-        details.push({ key: 'c1', level: 'warning', title: 'C1 — Cohérence par option', message: `Écart détecté pour ${mismatches.length} élément(s) : ${noms}.` })
+        const noms = optionMismatches.value.map(({ counter }) => counter.nom).join(', ')
+        details.push({ key: 'c1', level: 'error', title: 'C1 — Cohérence par option', message: `Écart avec le compteur système pour ${optionMismatches.value.length} élément(s) : ${noms}. L'enregistrement est bloqué tant que ces valeurs ne correspondent pas.` })
     }
 
     // C2 : Plafond de voix (Max 9 voix par bulletin)
@@ -93,14 +104,14 @@ const controlDetails = computed(() => {
         details.push({ key: 'c3', level: 'ok', title: 'C3 — Plancher de voix', message: `Le total des voix couvre bien tous les bulletins valables (${bulletinsValables}).` })
     }
 
-    // C4 : Bulletins trouvés (Manuel) vs Système
-    const ecartSysteme = Math.abs(ballotsFound - systemBallots)
-    if (ecartSysteme === 0) {
+    // C4 : Bulletins trouvés (Manuel) vs Système — bloquant
+    if (!ballotsMismatch.value) {
         details.push({ key: 'c4', level: 'ok', title: 'C4 — Cohérence des bulletins', message: `Le nombre de bulletins trouvés (${ballotsFound}) correspond au comptage système.` })
     } else {
+        const ecartSysteme = Math.abs(ballotsFound - props.system_ballots_count)
         details.push({
-            key: 'c4', level: 'warning', title: 'C4 — Cohérence des bulletins',
-            message: `Écart de ${ecartSysteme} bulletin(s) entre la saisie manuelle (${ballotsFound}) et le système (${systemBallots}).`
+            key: 'c4', level: 'error', title: 'C4 — Cohérence des bulletins',
+            message: `Écart de ${ecartSysteme} bulletin(s) entre la saisie manuelle (${ballotsFound}) et le système (${props.system_ballots_count}). L'enregistrement est bloqué tant que ces valeurs ne correspondent pas.`
         })
     }
 
@@ -111,6 +122,7 @@ const hasCriticalError = computed(() => controlDetails.value.some(d => d.level =
 const hasWarning = computed(() => controlDetails.value.some(d => d.level === 'warning'))
 
 const submit = () => {
+    if (hasCounterMismatch.value) return
     form.post('/operator/pv')
 }
 </script>
@@ -147,7 +159,8 @@ const submit = () => {
                             <td class="px-3 py-2 text-center font-mono text-gray-600">{{ counter.system_count }}</td>
                             <td class="px-3 py-2 text-center">
                                 <input v-model.number="form.pv_data[idx].count" type="number" min="0"
-                                       class="w-24 px-2 py-1 border border-gray-300 rounded text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" />
+                                       class="w-24 px-2 py-1 border rounded text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                                       :class="(toInt(form.pv_data[idx].count) - counter.system_count) === 0 ? 'border-gray-300' : 'border-red-400 bg-red-50'" />
                             </td>
                             <td class="px-3 py-2 text-center font-mono"
                                 :class="(toInt(form.pv_data[idx].count) - counter.system_count) === 0 ? 'text-green-600' : 'text-red-600'">
@@ -182,7 +195,8 @@ const submit = () => {
                         </span>
                     </label>
                     <input v-model.number="form.ballots_found" type="number" min="0"
-                           class="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" />
+                           class="w-full md:w-1/2 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                           :class="ballotsMismatch ? 'border-red-400 bg-red-50' : 'border-gray-300'" />
                 </div>
             </div>
 
@@ -210,8 +224,8 @@ const submit = () => {
                     </div>
                 </div>
 
-                <p v-if="hasCriticalError" class="mt-3 text-sm font-medium text-red-700">
-                    ⚠️ Anomalie(s) critique(s) détectée(s). Vous pouvez tout de même enregistrer, mais le bureau sera marqué pour vérification obligatoire.
+                <p v-if="hasCounterMismatch" class="mt-3 text-sm font-medium text-red-700">
+                    ⚠️ L'enregistrement est désactivé : corrigez les écarts entre le comptage système et votre saisie (voix et/ou nombre de bulletins) ci-dessus pour continuer.
                 </p>
                 <p v-else-if="hasWarning" class="mt-3 text-sm font-medium text-amber-700">
                     ℹ️ Des écarts non bloquants subsistent. Vérifiez les chiffres avant validation si possible.
@@ -221,8 +235,9 @@ const submit = () => {
             <!-- Actions -->
             <div class="flex gap-3 pb-8">
                 <button type="submit"
-                        :disabled="form.processing"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        :disabled="form.processing || hasCounterMismatch"
+                        :title="hasCounterMismatch ? 'Corrigez les écarts avec le comptage système avant d\'enregistrer' : ''"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 transition-colors">
                     Enregistrer le PV
                 </button>
                 <Link :href="`/operator/dashboard`"
