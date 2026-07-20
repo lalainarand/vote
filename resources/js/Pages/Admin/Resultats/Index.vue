@@ -138,7 +138,7 @@ const statusLabels = {
                 </div>
             </div>
 
-            <div class="bg-white rounded-xl border border-gray-100 p-5">
+            <!-- <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-3xl font-bold text-green-600">
                     {{ total_candidates_pv.toLocaleString('fr-FR') }}
                 </div>
@@ -159,7 +159,7 @@ const statusLabels = {
                 <div class="text-[11px] text-gray-400 mt-1 italic">
                     Un bulletin de procuration est réparti sur 1 à 9 candidats ; ce total compte les votes attribués, pas le nombre de bulletins.
                 </div>
-            </div>
+            </div> -->
 
             <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-sm text-gray-500 mb-2">Sources (bureaux validés)</div>
