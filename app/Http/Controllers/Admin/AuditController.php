@@ -7,6 +7,7 @@ use App\Models\BulletinLog;
 use App\Models\BureauVote;
 use App\Models\User;
 use App\Models\VoteLog;
+use App\Models\VoteOption;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,8 +27,8 @@ class AuditController extends Controller
         if ($request->filled('bureau_id')) {
             $query->where('bureau_vote_id', $request->bureau_id);
         }
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+        if ($request->filled('option_id')) {          // 🆕 remplace user_id
+            $query->where('vote_option_id', $request->option_id);
         }
         if ($request->filled('action')) {
             $query->where('action', $request->action);
@@ -42,14 +43,13 @@ class AuditController extends Controller
             $query->where('is_procuration', $request->procuration === '1');
         }
 
-        // ── 🆕 Statistiques sur le même jeu de filtres (avant pagination) ──
         $stats = [
-            'total'          => (clone $query)->sum('quantity'),
-            'procuration'    => (clone $query)->where('is_procuration', true)->sum('quantity'),
+            'total'            => (clone $query)->sum('quantity'),
+            'procuration'      => (clone $query)->where('is_procuration', true)->sum('quantity'),
             'hors_procuration' => (clone $query)->where('is_procuration', false)->sum('quantity'),
-            'plus'           => (clone $query)->where('action', '+1')->sum('quantity'),
-            'minus'          => (clone $query)->where('action', '-1')->sum('quantity'),
-            'count'          => (clone $query)->count(),
+            'plus'             => (clone $query)->where('action', '+1')->sum('quantity'),
+            'minus'            => (clone $query)->where('action', '-1')->sum('quantity'),
+            'count'            => (clone $query)->count(),
         ];
 
         $logs = $query->paginate(50)->withQueryString();
@@ -72,11 +72,11 @@ class AuditController extends Controller
         });
 
         return Inertia::render('Admin/Audit/Index', [
-            'logs' => $logs,
-            'stats' => $stats, // 🆕
-            'filters' => $request->only(['bureau_id', 'user_id', 'action', 'date_from', 'date_to', 'procuration']),
-            'bureaux' => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
-            'users' => User::orderBy('name')->get(['id', 'name']),
+            'logs'      => $logs,
+            'stats'     => $stats,
+            'filters'   => $request->only(['bureau_id', 'option_id', 'action', 'date_from', 'date_to', 'procuration']),
+            'bureaux'   => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
+            'candidats' => VoteOption::orderBy('nom')->get(['id', 'nom']), 
         ]);
     }
 

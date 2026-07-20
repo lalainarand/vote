@@ -1,20 +1,26 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import SearchableSelect from '@/Components/Searchableselect.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 
 const props = defineProps({
-    logs:     Object,
-    stats:    Object,
-    filters:  Object,
-    bureaux:  Array,
-    users:    Array,
+    logs:      Object,
+    stats:     Object,
+    filters:   Object,
+    bureaux:   Array,
+    candidats: Array,
 })
+
+const candidatOptions = computed(() =>
+    props.candidats.map(c => ({ id: c.id, label: c.nom }))
+)
 
 const filterBureau = (id) => {
     router.get('/admin/audit', { ...props.filters, bureau_id: id || undefined }, { preserveState: true })
 }
-const filterUser = (id) => {
-    router.get('/admin/audit', { ...props.filters, user_id: id || undefined }, { preserveState: true })
+const filterCandidat = (id) => {
+    router.get('/admin/audit', { ...props.filters, option_id: id || undefined }, { preserveState: true })
 }
 const filterAction = (action) => {
     router.get('/admin/audit', { ...props.filters, action: action || undefined }, { preserveState: true })
@@ -35,24 +41,30 @@ const filterProcuration = (value) => {
             <select @change="filterBureau($event.target.value)"
                     class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="">Tous les bureaux</option>
-                <option v-for="b in bureaux" :key="b.id" :value="b.id">{{ b.code }} — {{ b.nom }}</option>
+                <option v-for="b in bureaux" :key="b.id" :value="b.id" :selected="filters.bureau_id == b.id">
+                    {{ b.code }} — {{ b.nom }}
+                </option>
             </select>
-            <select @change="filterUser($event.target.value)"
-                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <option value="">Tous les utilisateurs</option>
-                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
+
+            <SearchableSelect
+                :model-value="filters.option_id"
+                :options="candidatOptions"
+                placeholder="Tous les candidats"
+                search-placeholder="Rechercher un candidat..."
+                @update:model-value="filterCandidat"
+            />
+
             <select @change="filterAction($event.target.value)"
                     class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="">Toutes les actions</option>
-                <option value="+1">+1</option>
-                <option value="-1">-1</option>
+                <option value="+1" :selected="filters.action === '+1'">+1</option>
+                <option value="-1" :selected="filters.action === '-1'">-1</option>
             </select>
             <select @change="filterProcuration($event.target.value)"
                     class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="">Tout (procuration ou non)</option>
-                <option value="1">Procuration uniquement</option>
-                <option value="0">Hors procuration</option>
+                <option value="1" :selected="filters.procuration === '1'">Procuration uniquement</option>
+                <option value="0" :selected="filters.procuration === '0'">Hors procuration</option>
             </select>
             <Link :href="`/admin/audit`"
                   class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium text-center">
