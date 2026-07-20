@@ -14,12 +14,9 @@ use Inertia\Inertia;
 class AuditController extends Controller
 {
 
-   public function index(Request $request)
+    public function index(Request $request)
     {
         $query = VoteLog::with(['bureau', 'voteOption', 'user'])
-            // 🛡️ EXCLUSION UNIQUEMENT DES LOGS D'ANNULATION (RESET)
-            // On masque les compensations système, mais on GARDE les votes restaurés (is_restored = true) 
-            // car ils représentent l'état valide et actuel des données.
             ->where(function ($q) {
                 $q->whereNull('is_reset')->orWhere('is_reset', false);
             })
@@ -45,6 +42,16 @@ class AuditController extends Controller
             $query->where('is_procuration', $request->procuration === '1');
         }
 
+        // ── 🆕 Statistiques sur le même jeu de filtres (avant pagination) ──
+        $stats = [
+            'total'          => (clone $query)->sum('quantity'),
+            'procuration'    => (clone $query)->where('is_procuration', true)->sum('quantity'),
+            'hors_procuration' => (clone $query)->where('is_procuration', false)->sum('quantity'),
+            'plus'           => (clone $query)->where('action', '+1')->sum('quantity'),
+            'minus'          => (clone $query)->where('action', '-1')->sum('quantity'),
+            'count'          => (clone $query)->count(),
+        ];
+
         $logs = $query->paginate(50)->withQueryString();
 
         $logs->getCollection()->transform(function ($log) {
@@ -53,7 +60,7 @@ class AuditController extends Controller
                 'action' => $log->action,
                 'quantity' => $log->quantity,
                 'is_procuration' => $log->is_procuration,
-                'is_restored' => $log->is_restored ?? false, // 🆕 Utile pour l'affichage frontend (badge "Restauré")
+                'is_restored' => $log->is_restored ?? false,
                 'created_at' => Carbon::parse($log->created_at)->format('d/m/Y H:i:s'),
                 'bureau' => $log->bureau ? [
                     'code' => $log->bureau->code,
@@ -66,6 +73,7 @@ class AuditController extends Controller
 
         return Inertia::render('Admin/Audit/Index', [
             'logs' => $logs,
+            'stats' => $stats, // 🆕
             'filters' => $request->only(['bureau_id', 'user_id', 'action', 'date_from', 'date_to', 'procuration']),
             'bureaux' => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
             'users' => User::orderBy('name')->get(['id', 'name']),
@@ -75,7 +83,6 @@ class AuditController extends Controller
     public function bulletins(Request $request)
     {
         $query = BulletinLog::with(['bureau', 'user'])
-            // 🛡️ EXCLUSION UNIQUEMENT DES LOGS D'ANNULATION (RESET)
             ->where(function ($q) {
                 $q->whereNull('is_reset')->orWhere('is_reset', false);
             })
@@ -101,6 +108,16 @@ class AuditController extends Controller
             $query->where('is_manuel', $request->manuel === '1');
         }
 
+        // ── 🆕 Statistiques sur le même jeu de filtres (avant pagination) ──
+        $stats = [
+            'total'    => (clone $query)->sum('quantity'),
+            'manuel'   => (clone $query)->where('is_manuel', true)->sum('quantity'),
+            'unitaire' => (clone $query)->where('is_manuel', false)->sum('quantity'),
+            'plus'     => (clone $query)->where('action', '+1')->sum('quantity'),
+            'minus'    => (clone $query)->where('action', '-1')->sum('quantity'),
+            'count'    => (clone $query)->count(),
+        ];
+
         $logs = $query->paginate(50)->withQueryString();
 
         $logs->getCollection()->transform(function ($log) {
@@ -109,7 +126,7 @@ class AuditController extends Controller
                 'quantity'    => $log->quantity,
                 'action'      => $log->action,
                 'is_manuel'   => $log->is_manuel,
-                'is_restored' => $log->is_restored ?? false, // 🆕 Utile pour l'affichage frontend
+                'is_restored' => $log->is_restored ?? false,
                 'created_at'  => Carbon::parse($log->created_at)->format('d/m/Y H:i:s'),
                 'bureau'      => $log->bureau ? [
                     'code' => $log->bureau->code,
@@ -121,6 +138,7 @@ class AuditController extends Controller
 
         return Inertia::render('Admin/Audit/Bulletins', [
             'logs'    => $logs,
+            'stats'   => $stats, // 🆕
             'filters' => $request->only(['bureau_id', 'user_id', 'action', 'date_from', 'date_to', 'manuel']),
             'bureaux' => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
             'users'   => User::orderBy('name')->get(['id', 'name']),

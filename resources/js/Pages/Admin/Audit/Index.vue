@@ -4,6 +4,7 @@ import { Link, router } from '@inertiajs/vue3'
 
 const props = defineProps({
     logs:     Object,
+    stats:    Object,
     filters:  Object,
     bureaux:  Array,
     users:    Array,
@@ -57,6 +58,34 @@ const filterProcuration = (value) => {
                   class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium text-center">
                 Réinitialiser
             </Link>
+        </div>
+
+        <!-- Statistiques (mises à jour selon les filtres actifs) -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+            <div class="bg-white rounded-xl border border-gray-100 p-4">
+                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Total logs</div>
+                <div class="text-xl font-bold text-gray-800">{{ stats.count }}</div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-100 p-4">
+                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Quantité totale</div>
+                <div class="text-xl font-bold text-gray-800">{{ stats.total }}</div>
+            </div>
+            <div class="bg-purple-50 rounded-xl border border-purple-100 p-4">
+                <div class="text-xs font-semibold text-purple-600 uppercase mb-1">Procuration</div>
+                <div class="text-xl font-bold text-purple-700">{{ stats.procuration }}</div>
+            </div>
+            <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Hors procuration</div>
+                <div class="text-xl font-bold text-gray-700">{{ stats.hors_procuration }}</div>
+            </div>
+            <div class="bg-green-50 rounded-xl border border-green-100 p-4">
+                <div class="text-xs font-semibold text-green-600 uppercase mb-1">+1</div>
+                <div class="text-xl font-bold text-green-700">{{ stats.plus }}</div>
+            </div>
+            <div class="bg-red-50 rounded-xl border border-red-100 p-4">
+                <div class="text-xs font-semibold text-red-600 uppercase mb-1">-1</div>
+                <div class="text-xl font-bold text-red-700">{{ stats.minus }}</div>
+            </div>
         </div>
 
         <!-- Table -->

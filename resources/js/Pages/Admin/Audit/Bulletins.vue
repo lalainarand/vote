@@ -4,28 +4,29 @@ import { Link, router } from '@inertiajs/vue3'
 
 const props = defineProps({
     logs:     Object,
+    stats:    Object,
     filters:  Object,
     bureaux:  Array,
     users:    Array,
 })
 
 const filterBureau = (id) => {
-    router.get('/admin/audit/bulletins', { ...props.filters, bureau_id: id || undefined }, { preserveState: true })
+    router.get('/admin/bulletins/audit', { ...props.filters, bureau_id: id || undefined }, { preserveState: true })
 }
 const filterUser = (id) => {
-    router.get('/admin/audit/bulletins', { ...props.filters, user_id: id || undefined }, { preserveState: true })
+    router.get('/admin/bulletins/audit', { ...props.filters, user_id: id || undefined }, { preserveState: true })
 }
 const filterAction = (action) => {
-    router.get('/admin/audit/bulletins', { ...props.filters, action: action || undefined }, { preserveState: true })
+    router.get('/admin/bulletins/audit', { ...props.filters, action: action || undefined }, { preserveState: true })
 }
 const filterManuel = (value) => {
-    router.get('/admin/audit/bulletins', { ...props.filters, manuel: value || undefined }, { preserveState: true })
+    router.get('/admin/bulletins/audit', { ...props.filters, manuel: value || undefined }, { preserveState: true })
 }
 const filterDateFrom = (value) => {
-    router.get('/admin/audit/bulletins', { ...props.filters, date_from: value || undefined }, { preserveState: true })
+    router.get('/admin/bulletins/audit', { ...props.filters, date_from: value || undefined }, { preserveState: true })
 }
 const filterDateTo = (value) => {
-    router.get('/admin/audit/bulletins', { ...props.filters, date_to: value || undefined }, { preserveState: true })
+    router.get('/admin/bulletins/audit', { ...props.filters, date_to: value || undefined }, { preserveState: true })
 }
 </script>
 
@@ -78,10 +79,38 @@ const filterDateTo = (value) => {
         </div>
 
         <div class="flex justify-end mb-4">
-            <Link href="/admin/audit/bulletins"
+            <Link href="/admin/bulletins/audit"
                   class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">
                 Réinitialiser les filtres
             </Link>
+        </div>
+
+        <!-- Statistiques (mises à jour selon les filtres actifs) -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+            <div class="bg-white rounded-xl border border-gray-100 p-4">
+                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Total logs</div>
+                <div class="text-xl font-bold text-gray-800">{{ stats.count }}</div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-100 p-4">
+                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Quantité totale</div>
+                <div class="text-xl font-bold text-gray-800">{{ stats.total }}</div>
+            </div>
+            <div class="bg-amber-50 rounded-xl border border-amber-100 p-4">
+                <div class="text-xs font-semibold text-amber-600 uppercase mb-1">Saisie groupée</div>
+                <div class="text-xl font-bold text-amber-700">{{ stats.manuel }}</div>
+            </div>
+            <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Clic unitaire</div>
+                <div class="text-xl font-bold text-gray-700">{{ stats.unitaire }}</div>
+            </div>
+            <div class="bg-green-50 rounded-xl border border-green-100 p-4">
+                <div class="text-xs font-semibold text-green-600 uppercase mb-1">+1</div>
+                <div class="text-xl font-bold text-green-700">{{ stats.plus }}</div>
+            </div>
+            <div class="bg-red-50 rounded-xl border border-red-100 p-4">
+                <div class="text-xs font-semibold text-red-600 uppercase mb-1">-1</div>
+                <div class="text-xl font-bold text-red-700">{{ stats.minus }}</div>
+            </div>
         </div>
 
         <!-- Table -->
