@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\BureauVote;
 use App\Models\VoteLog;
@@ -36,16 +37,26 @@ class ResultController extends Controller
 
         $options = VoteOption::orderBy('ordre_affichage')->get();
 
-        $results = $options->map(function ($option) use ($bureauIds) {
+        // Base commune : exclut systématiquement les logs de reset,
+        // partagée par toutes les requêtes VoteLog / BulletinLog de cette méthode.
+        $excludeReset = function ($query) {
+            $query->where(function ($q) {
+                $q->whereNull('is_reset')->orWhere('is_reset', false);
+            });
+        };
+
+        $results = $options->map(function ($option) use ($bureauIds, $excludeReset) {
 
             // --- Compteur système (VoteLogs, quantity incluse pour les procurations) ---
-            $plus  = VoteLog::where('vote_option_id', $option->id)
+            $plus = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $bureauIds)
                 ->where('action', '+1')
+                ->tap($excludeReset)
                 ->sum('quantity');
             $minus = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $bureauIds)
                 ->where('action', '-1')
+                ->tap($excludeReset)
                 ->sum('quantity');
             $systemCount = $plus - $minus;
 
@@ -53,6 +64,7 @@ class ResultController extends Controller
             $procuration = VoteLog::where('vote_option_id', $option->id)
                 ->whereIn('bureau_vote_id', $bureauIds)
                 ->where('is_procuration', true)
+                ->tap($excludeReset)
                 ->sum('quantity');
 
             // --- PV papier (BureauResults) avec répartition par source ---
@@ -86,7 +98,20 @@ class ResultController extends Controller
 
         $totalProcuration = VoteLog::whereIn('bureau_vote_id', $bureauIds)
             ->where('is_procuration', true)
+            ->tap($excludeReset)
             ->sum('quantity');
+
+        // 🆕 Nombre total de bulletins comptés (compteur net +1/-1, indépendant
+        // du nombre de candidats cochés par bulletin — contrairement aux VoteLog).
+        $bulletinsPlus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->where('action', '+1')
+            ->tap($excludeReset)
+            ->sum('quantity');
+        $bulletinsMinus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->where('action', '-1')
+            ->tap($excludeReset)
+            ->sum('quantity');
+        $totalBulletins = $bulletinsPlus - $bulletinsMinus;
 
         $sourceBreakdown = BureauVote::whereIn('bureaux_vote.id', $bureauIds)
             ->join('bureau_results', 'bureaux_vote.id', '=', 'bureau_results.bureau_vote_id')
@@ -100,6 +125,7 @@ class ResultController extends Controller
             'total_candidates_system'      => $totalCandidatesSystem,
             'total_candidates_procuration' => (int) $totalCandidatesProcuration,
             'total_procuration'            => (int) $totalProcuration,
+            'total_bulletins'              => (int) $totalBulletins, // 🆕
             'validated_bureaux'            => $validatedBureaux,
             'total_bureaux'                => $totalBureaux,
             'source_breakdown'             => $sourceBreakdown,

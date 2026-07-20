@@ -9,6 +9,7 @@ const props = defineProps({
     total_candidates_system:       Number,
     total_candidates_procuration:  Number,
     total_procuration:             Number,
+    total_bulletins:               Number,
     validated_bureaux:             Number,
     total_bureaux:                 Number,
     source_breakdown:              Object,
@@ -53,15 +54,15 @@ const statusLabels = {
 }
 </script>
 
-        <template>
-            <AuthenticatedLayout>
-            <template #header>
+<template>
+    <AuthenticatedLayout>
+        <template #header>
             <div class="flex items-center justify-between">
                 <h1 class="text-base font-semibold text-gray-800">Résultats globaux</h1>
                 <a :href="`/admin/resultats/export?scope=${scope}`"
-   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-    Exporter Excel
-</a>
+                   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    Exporter Excel
+                </a>
             </div>
         </template>
 
@@ -114,7 +115,7 @@ const statusLabels = {
         </div>
 
         <!-- Stats -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-3xl font-bold text-gray-900">
                     {{ validated_bureaux }} / {{ total_bureaux }}
@@ -126,6 +127,17 @@ const statusLabels = {
                     </div>
                 </div>
             </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 p-5">
+                <div class="text-3xl font-bold text-indigo-600">
+                    {{ total_bulletins.toLocaleString('fr-FR') }}
+                </div>
+                <div class="text-sm text-gray-500 mt-1">Bulletins comptés</div>
+                <div class="text-xs text-gray-400 mt-1">
+                    Nombre de bulletins physiques dépouillés (compteur net, indépendant du nombre de candidats cochés par bulletin)
+                </div>
+            </div>
+
             <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-3xl font-bold text-green-600">
                     {{ total_candidates_pv.toLocaleString('fr-FR') }}
@@ -135,15 +147,20 @@ const statusLabels = {
                     Syst. : {{ total_candidates_system.toLocaleString('fr-FR') }}
                 </div>
             </div>
+
             <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-3xl font-bold text-purple-600">
                     {{ total_procuration.toLocaleString('fr-FR') }}
                 </div>
-                <div class="text-sm text-gray-500 mt-1">Votes par procuration</div>
+                <div class="text-sm text-gray-500 mt-1">Votes attribués par procuration</div>
                 <div class="text-xs text-gray-400 mt-1">
-                    Candidats : {{ total_candidates_procuration.toLocaleString('fr-FR') }}
+                    dont votes aux candidats : {{ total_candidates_procuration.toLocaleString('fr-FR') }}
+                </div>
+                <div class="text-[11px] text-gray-400 mt-1 italic">
+                    Un bulletin de procuration est réparti sur 1 à 9 candidats ; ce total compte les votes attribués, pas le nombre de bulletins.
                 </div>
             </div>
+
             <div class="bg-white rounded-xl border border-gray-100 p-5">
                 <div class="text-sm text-gray-500 mb-2">Sources (bureaux validés)</div>
                 <div class="text-xs space-y-1.5">

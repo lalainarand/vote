@@ -76,7 +76,7 @@ class AuditController extends Controller
             'stats'     => $stats,
             'filters'   => $request->only(['bureau_id', 'option_id', 'action', 'date_from', 'date_to', 'procuration']),
             'bureaux'   => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
-            'candidats' => VoteOption::orderBy('nom')->get(['id', 'nom']), 
+            'candidats' => VoteOption::orderBy('nom')->get(['id', 'nom']),
         ]);
     }
 
@@ -108,9 +108,11 @@ class AuditController extends Controller
             $query->where('is_manuel', $request->manuel === '1');
         }
 
-        // ── 🆕 Statistiques sur le même jeu de filtres (avant pagination) ──
+        // Dans AuditController@bulletins, ajoute une clé 'net' dans $stats :
         $stats = [
             'total'    => (clone $query)->sum('quantity'),
+            'net'      => (clone $query)->where('action', '+1')->sum('quantity')
+                - (clone $query)->where('action', '-1')->sum('quantity'), // 🆕
             'manuel'   => (clone $query)->where('is_manuel', true)->sum('quantity'),
             'unitaire' => (clone $query)->where('is_manuel', false)->sum('quantity'),
             'plus'     => (clone $query)->where('action', '+1')->sum('quantity'),
