@@ -12,6 +12,10 @@ const props = defineProps({
 const filterBureau = (id) => {
     router.get('/admin/electeurs/audit', { ...props.filters, bureau_id: id || undefined }, { preserveState: true })
 }
+
+const changeSeuil = (value) => {
+    router.get('/admin/electeurs/audit', { ...props.filters, seuil: value || undefined }, { preserveState: true })
+}
 </script>
 
 <template>
@@ -22,22 +26,32 @@ const filterBureau = (id) => {
 
         <!-- Avertissement méthode -->
         <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
-            <strong>Méthode d'estimation :</strong> chaque bulletin est délimité par deux clics successifs sur le compteur
-            de bulletins (les clics annulés par un « -1 » sont retirés au préalable). Si plusieurs quantités différentes
-            de votes de procuration apparaissent dans le même intervalle (ex : 50 puis 30), chacune est traitée comme un
-            bulletin distinct et comptée séparément — donc 50 + 30 = 80 électeurs, pas seulement 50. La seule limite
-            restante : deux bulletins différents ayant exactement la <strong>même</strong> quantité dans la même fenêtre
-            sont indiscernables et fusionnés en un seul (voir « Fenêtres à vérifier » ci-dessous).
+            <strong>Méthode d'estimation :</strong> chaque bulletin physique est délimité par deux clics successifs sur
+            le compteur de bulletins (les clics annulés par un « -1 » sont retirés au préalable). À l'intérieur d'un
+            même intervalle, un nouveau bulletin de procuration est détecté dès que la quantité change
+            <strong>ou</strong> qu'une pause de plus de {{ stats.seuil_secondes }}s sépare deux votes — ce second critère
+            permet de distinguer deux bulletins successifs qui auraient, par coïncidence, la même quantité d'électeurs.
+        </div>
+
+        <!-- Calibration du seuil -->
+        <div class="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-3 text-xs text-gray-600">
+            <span class="font-medium">Seuil de pause (secondes) :</span>
+            <input type="number" min="1" max="60" :value="stats.seuil_secondes"
+                   @change="changeSeuil($event.target.value)"
+                   class="w-20 px-2 py-1 border border-gray-300 rounded text-sm" />
+            <span class="text-gray-400">
+                Ajuste selon l'écart réel observé entre deux candidats saisis pour un même bulletin.
+                Un seuil trop bas sépare à tort un bulletin unique ; trop haut, il fusionne deux bulletins distincts.
+            </span>
         </div>
 
         <!-- Explication des fenêtres à risque -->
         <div v-if="stats.nb_fenetres_multi_bulletins > 0"
              class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 text-xs text-blue-800 leading-relaxed">
             <strong>ℹ️ Fenêtres avec plusieurs bulletins détectés : {{ stats.nb_fenetres_multi_bulletins }}</strong> —
-            ces intervalles contenaient plusieurs bulletins de procuration (identifiés par leurs quantités différentes),
-            déjà comptés séparément dans le total. Elles restent surlignées ci-dessous pour vérification visuelle : si
-            dans l'une d'elles deux bulletins avaient par coïncidence la même quantité, ils auraient été fusionnés à
-            tort et sous-comptés.
+            ces intervalles contenaient plusieurs bulletins de procuration distincts (quantité différente ou pause
+            détectée), déjà comptés séparément dans le total. Elles restent surlignées ci-dessous pour vérification
+            visuelle ponctuelle.
         </div>
 
         <!-- Filtres -->
@@ -69,7 +83,7 @@ const filterBureau = (id) => {
                 <div class="text-xs font-semibold text-purple-600 uppercase mb-1">Électeurs par procuration</div>
                 <div class="text-xl font-bold text-purple-700">{{ stats.total_electeurs_procuration.toLocaleString('fr-FR') }}</div>
             </div>
-            <div class="rounded-xl border p-4"
+            <!-- <div class="rounded-xl border p-4"
                  :class="stats.nb_fenetres_multi_bulletins > 0 ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'">
                 <div class="text-xs font-semibold uppercase mb-1" :class="stats.nb_fenetres_multi_bulletins > 0 ? 'text-blue-600' : 'text-gray-500'">
                     Fenêtres à vérifier
@@ -77,7 +91,7 @@ const filterBureau = (id) => {
                 <div class="text-xl font-bold" :class="stats.nb_fenetres_multi_bulletins > 0 ? 'text-blue-700' : 'text-gray-800'">
                     {{ stats.nb_fenetres_multi_bulletins.toLocaleString('fr-FR') }}
                 </div>
-            </div>
+            </div> -->
         </div>
 
         <!-- Statistiques : bulletins -->
@@ -119,7 +133,7 @@ const filterBureau = (id) => {
                     </tr>
                     <tr v-for="(s, idx) in sessions.data" :key="idx"
                         :class="[
-                            s.nb_bulletins_fenetre > 1 ? 'bg-blue-50/50 hover:bg-blue-50' :
+                            s.nb_bulletins_detectes > 1 ? 'bg-blue-50/50 hover:bg-blue-50' :
                             s.type === 'procuration' ? 'bg-purple-50/40 hover:bg-purple-50' : 'hover:bg-gray-50'
                         ]">
                         <td class="px-4 py-3 text-sm font-mono text-gray-600">
@@ -142,10 +156,14 @@ const filterBureau = (id) => {
                             {{ s.nb_candidats ?? '—' }}
                         </td>
                         <td class="px-4 py-3">
-                            <span v-if="s.nb_bulletins_fenetre > 1" class="text-blue-600 text-xs font-medium"
-                                  title="Plusieurs bulletins de procuration détectés dans le même intervalle (quantités distinctes) — déjà comptés séparément, à vérifier visuellement">
-                                ℹ {{ s.nb_bulletins_fenetre }} bulletins dans cette fenêtre
-                            </span>
+                            <div v-if="s.nb_bulletins_detectes > 1" class="text-xs">
+                                <span class="text-blue-600 font-medium">
+                                    ℹ {{ s.nb_bulletins_detectes }} bulletins détectés
+                                </span>
+                                <div class="text-blue-500 mt-0.5">
+                                    {{ s.detail_bulletins.map(b => `${b.quantity} (${b.nb_lignes} lignes)`).join(' + ') }}
+                                </div>
+                            </div>
                         </td>
                     </tr>
                 </tbody>

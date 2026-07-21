@@ -52,6 +52,41 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
     Route::get('bulletins/audit', [AuditController::class, 'bulletins'])->name('audit.bulletins');
     Route::get('electeurs/audit', [AuditController::class, 'electeurs'])->name('audit.electeurs');
+    Route::get('/debug/procuration-collisions', function () {
+    $collisions = \App\Models\VoteLog::where('is_procuration', true)
+        ->where(function ($q) {
+            $q->whereNull('is_reset')->orWhere('is_reset', false);
+        })
+        ->orderBy('bureau_vote_id')
+        ->orderBy('created_at')
+        ->get(['bureau_vote_id', 'quantity', 'created_at'])
+        ->groupBy(fn ($v) => $v->bureau_vote_id . '-' . $v->quantity)
+        ->filter(fn ($g) => $g->count() > 1)
+        ->map(function ($g) {
+            $dates = $g->pluck('created_at')->values();
+            $ecarts = [];
+            for ($i = 1; $i < $dates->count(); $i++) {
+                $ecarts[] = \Carbon\Carbon::parse($dates[$i])
+                    ->diffInSeconds(\Carbon\Carbon::parse($dates[$i - 1]));
+            }
+            return [
+                'nb_occurrences' => $g->count(),
+                'ecarts_secondes' => $ecarts,
+                'dates' => $dates->map(fn($d) => (string) $d)->all(),
+            ];
+        });
+
+    // Ne garder que les cas où au moins un écart dépasse le seuil (ex: 60s)
+    $suspects = $collisions->filter(function ($c) {
+        return collect($c['ecarts_secondes'])->contains(fn ($e) => $e > 60);
+    });
+
+    dd([
+        'total_combinaisons_avec_doublons' => $collisions->count(),
+        'suspects_ecart_plus_de_60s'       => $suspects->count(),
+        'detail_suspects'                  => $suspects,
+    ]);
+});
 });
 
 // ── Routes Opérateur ──────────────────────────────────────────────────────
