@@ -78,7 +78,7 @@ const filterProcuration = (value) => {
                 <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Total logs</div>
                 <div class="text-xl font-bold text-gray-800">{{ stats.count }}</div>
             </div>
-            <div class="bg-white rounded-xl border border-gray-100 p-4">
+            <!-- <div class="bg-white rounded-xl border border-gray-100 p-4">
                 <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Quantité totale</div>
                 <div class="text-xl font-bold text-gray-800">{{ stats.total }}</div>
             </div>
@@ -89,7 +89,7 @@ const filterProcuration = (value) => {
             <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
                 <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Hors procuration</div>
                 <div class="text-xl font-bold text-gray-700">{{ stats.hors_procuration }}</div>
-            </div>
+            </div> -->
             <div class="bg-green-50 rounded-xl border border-green-100 p-4">
                 <div class="text-xs font-semibold text-green-600 uppercase mb-1">+1</div>
                 <div class="text-xl font-bold text-green-700">{{ stats.plus }}</div>

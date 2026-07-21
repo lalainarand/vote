@@ -11,6 +11,7 @@ use App\Models\VoteLog;
 use App\Models\VoteOption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\ElecteursCalculatorService;
 use Inertia\Inertia;
 
 class BureauController extends Controller
@@ -18,25 +19,19 @@ class BureauController extends Controller
     /**
      * Liste des bureaux avec filtres
      */
-    public function index(Request $request)
+
+
+    public function index(Request $request, ElecteursCalculatorService $electeursCalculator)
     {
         $query = BureauVote::with(['users', 'statistics'])
-            // Ne compte que les photos encore valides (non réinitialisées)
             ->withCount(['bulletinImages' => fn($q) => $q->where('is_reset', false)])
-
-            // 1. Compter le nombre total de réinitialisations
             ->withCount('voteResets')
-
-            // 2. Récupérer uniquement la DERNIÈRE réinitialisation pour l'aperçu (motif + date)
             ->with(['voteResets' => function ($q) {
                 $q->latest()->select('id', 'bureau_vote_id', 'reason', 'created_at');
-            }])
+            }]);
+        // ⚠️ withSum('sum_plus'/'sum_minus') supprimé : ça comptait des VOTES
+        // (lignes VoteLog), pas des ÉLECTEURS — c'était trompeur sous "Compteur".
 
-            // 3. Calculer le compteur en temps réel (Somme des +1 moins Somme des -1)
-            ->withSum(['voteLogs as sum_plus' => fn($q) => $q->where('action', '+1')], 'quantity')
-            ->withSum(['voteLogs as sum_minus' => fn($q) => $q->where('action', '-1')], 'quantity');
-
-        // Filtres existants
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -46,9 +41,9 @@ class BureauController extends Controller
 
         $bureaux = $query->orderBy('code')->paginate(15)->withQueryString();
 
-        // Formatage des données pour Inertia
-        $bureaux->getCollection()->transform(function ($bureau) {
+        $bureaux->getCollection()->transform(function ($bureau) use ($electeursCalculator) {
             $latestReset = $bureau->voteResets->first();
+            $electeurs   = $electeursCalculator->pourBureau($bureau->id);
 
             return [
                 'id' => $bureau->id,
@@ -57,16 +52,15 @@ class BureauController extends Controller
                 'status' => $bureau->status,
                 'user_name' => $bureau->users->first()?->name ?? '—',
                 'bulletin_images_count' => $bureau->bulletin_images_count,
-
-                // Données de réinitialisation
                 'reset_count' => $bureau->vote_resets_count,
                 'latest_reset' => $latestReset ? [
                     'reason' => $latestReset->reason ?: 'Aucun motif fourni',
                     'created_at' => \Carbon\Carbon::parse($latestReset->created_at)->format('d/m/Y à H:i'),
                 ] : null,
 
-                // Compteur en temps réel
-                'live_votes' => ($bureau->sum_plus ?? 0) - ($bureau->sum_minus ?? 0),
+                'electeurs_individuels' => $electeurs['individuels'],
+                'electeurs_procuration' => $electeurs['procuration'],
+                'electeurs_total'       => $electeurs['total'],
             ];
         });
 
