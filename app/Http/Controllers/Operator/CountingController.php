@@ -142,8 +142,9 @@ class CountingController extends Controller
     public function voteManuel(Request $request)
     {
         $validated = $request->validate([
-            'vote_option_id' => 'required|exists:vote_options,id',
-            'quantity'       => 'required|integer|min:1|max:9999',
+            'vote_option_id'  => 'required|exists:vote_options,id',
+            'quantity'        => 'required|integer|min:1|max:9999',
+            'bulletin_log_id' => 'nullable|exists:bulletin_logs,id', // 🆕
         ]);
 
         $user = auth()->user();
@@ -159,19 +160,20 @@ class CountingController extends Controller
 
         DB::transaction(function () use ($validated, $bureau, $user) {
             VoteLog::create([
-                'bureau_vote_id' => $bureau->id,
-                'vote_option_id' => $validated['vote_option_id'],
-                'user_id'        => $user->id,
-                'action'         => '+1',
-                'quantity'       => $validated['quantity'],
-                'is_procuration' => true,
-                'created_at'     => now(),
+                'bureau_vote_id'  => $bureau->id,
+                'vote_option_id'  => $validated['vote_option_id'],
+                'user_id'         => $user->id,
+                'action'          => '+1',
+                'quantity'        => $validated['quantity'],
+                'is_procuration'  => true,
+                'bulletin_log_id' => $validated['bulletin_log_id'] ?? null, // 🆕
+                'created_at'      => now(),
             ]);
         });
 
         return response()->json([
             'success' => true,
-            'count' => $this->currentCount($bureau->id, $validated['vote_option_id']),
+            'count'   => $this->currentCount($bureau->id, $validated['vote_option_id']),
         ]);
     }
 
@@ -288,8 +290,8 @@ class CountingController extends Controller
             return response()->json(['error' => 'Le bureau n\'est plus en phase de comptage'], 403);
         }
 
-        DB::transaction(function () use ($validated, $bureau, $user) {
-            BulletinLog::create([
+        $bulletinLog = DB::transaction(function () use ($validated, $bureau, $user) {
+            return BulletinLog::create([
                 'bureau_vote_id' => $bureau->id,
                 'user_id'        => $user->id,
                 'action'         => '+1',
@@ -300,8 +302,9 @@ class CountingController extends Controller
         });
 
         return response()->json([
-            'success' => true,
-            'count' => $this->currentBulletinCount($bureau->id),
+            'success'          => true,
+            'count'            => $this->currentBulletinCount($bureau->id),
+            'bulletin_log_id'  => $bulletinLog->id, // 🆕 le frontend le garde pour les votes suivants
         ]);
     }
 

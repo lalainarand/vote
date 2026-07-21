@@ -86,32 +86,62 @@ const filterDateTo = (value) => {
         </div>
 
         <!-- Statistiques (mises à jour selon les filtres actifs) -->
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-            <div class="bg-white rounded-xl border border-gray-100 p-4">
-                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Total logs</div>
-                <div class="text-xl font-bold text-gray-800">{{ stats.count }}</div>
+        <!-- En-tête des statistiques -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    
+    <!-- Carte 1 : Total Électeurs (NET) -->
+    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+        <div class="text-3xl font-bold text-blue-600">
+            {{ (stats.net_electeurs || 0).toLocaleString('fr-FR') }}
+        </div>
+        <div class="text-sm text-gray-500 mt-1">Total électeurs (Net)</div>
+        <div class="text-xs text-gray-400 mt-1">
+            Résultat net : {{ (stats.plus || 0).toLocaleString('fr-FR') }} (+1) - {{ (stats.minus || 0).toLocaleString('fr-FR') }} (-1)
+        </div>
+    </div>
+
+    <!-- Carte 2 : Nombre d'opérations -->
+    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+        <div class="text-3xl font-bold text-gray-900">
+            {{ (stats.total_logs || 0).toLocaleString('fr-FR') }}
+        </div>
+        <div class="text-sm text-gray-500 mt-1">Total des opérations</div>
+        <div class="text-xs text-gray-400 mt-1">
+            Nombre de lignes d'audit enregistrées
+        </div>
+    </div>
+
+    <!-- Carte 3 : Saisie manuelle vs Unitaire -->
+    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+        <div class="text-3xl font-bold text-amber-600">
+            {{ (stats.manuel || 0).toLocaleString('fr-FR') }}
+        </div>
+        <div class="text-sm text-gray-500 mt-1">Saisie groupée (Manuel)</div>
+        <div class="text-xs text-gray-400 mt-1">
+            Unitaire : {{ (stats.unitaire || 0).toLocaleString('fr-FR') }}
+        </div>
+    </div>
+
+    <!-- Carte 4 : Répartition + / - -->
+    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+        <div class="text-sm font-semibold text-gray-700 mb-3">Mouvements</div>
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between items-center">
+                <span class="flex items-center gap-2 text-green-600">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span> Ajouts (+1)
+                </span>
+                <span class="font-bold">{{ (stats.plus || 0).toLocaleString('fr-FR') }}</span>
             </div>
-            <div class="bg-white rounded-xl border border-gray-100 p-4">
-                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Quantité totale</div>
-                <div class="text-xl font-bold text-gray-800">{{ stats.total }}</div>
-            </div>
-            <div class="bg-amber-50 rounded-xl border border-amber-100 p-4">
-                <div class="text-xs font-semibold text-amber-600 uppercase mb-1">Saisie groupée</div>
-                <div class="text-xl font-bold text-amber-700">{{ stats.manuel }}</div>
-            </div>
-            <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Clic unitaire</div>
-                <div class="text-xl font-bold text-gray-700">{{ stats.unitaire }}</div>
-            </div>
-            <div class="bg-green-50 rounded-xl border border-green-100 p-4">
-                <div class="text-xs font-semibold text-green-600 uppercase mb-1">+1</div>
-                <div class="text-xl font-bold text-green-700">{{ stats.plus }}</div>
-            </div>
-            <div class="bg-red-50 rounded-xl border border-red-100 p-4">
-                <div class="text-xs font-semibold text-red-600 uppercase mb-1">-1</div>
-                <div class="text-xl font-bold text-red-700">{{ stats.minus }}</div>
+            <div class="flex justify-between items-center">
+                <span class="flex items-center gap-2 text-red-600">
+                    <span class="w-2 h-2 rounded-full bg-red-500"></span> Retraits (-1)
+                </span>
+                <span class="font-bold">{{ (stats.minus || 0).toLocaleString('fr-FR') }}</span>
             </div>
         </div>
+    </div>
+
+</div>
 
         <!-- Table -->
         <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">

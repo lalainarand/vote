@@ -21,7 +21,6 @@ class ResultController extends Controller
 {
     public function index(Request $request)
     {
-        // Scope : 'all' (défaut) inclut tous les statuts, 'validated' ne garde que les validés
         $scope = $request->query('scope', 'all');
 
         $statusCounts = BureauVote::selectRaw('status, COUNT(*) as count')
@@ -33,51 +32,41 @@ class ResultController extends Controller
 
         $bureauIds = $scope === 'validated'
             ? BureauVote::where('status', 'validated')->pluck('id')
-            : BureauVote::pluck('id'); // tous statuts confondus
+            : BureauVote::pluck('id');
 
         $options = VoteOption::orderBy('ordre_affichage')->get();
 
-        // Base commune : exclut systématiquement les logs de reset,
-        // partagée par toutes les requêtes VoteLog / BulletinLog de cette méthode.
         $excludeReset = function ($query) {
             $query->where(function ($q) {
                 $q->whereNull('is_reset')->orWhere('is_reset', false);
             });
         };
 
-        $results = $options->map(function ($option) use ($bureauIds, $excludeReset) {
+        // 🆕 is_manuel = true  → procuration (voteManuel/bulletinVoteManuel)
+        // 🆕 is_manuel = false OU NULL → individuel (comportement par défaut
+        //    avant l'introduction de la procuration, pour les anciennes lignes)
+        $onlyProcuration = function ($query) {
+            $query->where('is_manuel', true);
+        };
+        $onlyIndividuel = function ($query) {
+            $query->where(function ($q) {
+                $q->where('is_manuel', false)->orWhereNull('is_manuel');
+            });
+        };
 
-            // --- Compteur système (VoteLogs, quantity incluse pour les procurations) ---
+        $results = $options->map(function ($option) use ($bureauIds, $excludeReset) {
             $plus = VoteLog::where('vote_option_id', $option->id)
-                ->whereIn('bureau_vote_id', $bureauIds)
-                ->where('action', '+1')
-                ->tap($excludeReset)
-                ->sum('quantity');
+                ->whereIn('bureau_vote_id', $bureauIds)->where('action', '+1')->tap($excludeReset)->sum('quantity');
             $minus = VoteLog::where('vote_option_id', $option->id)
-                ->whereIn('bureau_vote_id', $bureauIds)
-                ->where('action', '-1')
-                ->tap($excludeReset)
-                ->sum('quantity');
+                ->whereIn('bureau_vote_id', $bureauIds)->where('action', '-1')->tap($excludeReset)->sum('quantity');
+
             $systemCount = $plus - $minus;
 
-            // --- Procuration ---
             $procuration = VoteLog::where('vote_option_id', $option->id)
-                ->whereIn('bureau_vote_id', $bureauIds)
-                ->where('is_procuration', true)
-                ->tap($excludeReset)
-                ->sum('quantity');
+                ->whereIn('bureau_vote_id', $bureauIds)->where('is_procuration', true)->tap($excludeReset)->sum('quantity');
 
-            // --- PV papier (BureauResults) avec répartition par source ---
-            $bureauResults = BureauResult::where('vote_option_id', $option->id)
-                ->whereIn('bureau_vote_id', $bureauIds)
-                ->get();
-
+            $bureauResults = BureauResult::where('vote_option_id', $option->id)->whereIn('bureau_vote_id', $bureauIds)->get();
             $pvCount  = (int) $bureauResults->sum('count');
-            $bySource = [
-                'counting'       => (int) $bureauResults->where('source', 'counting')->sum('count'),
-                'manual_pv'      => (int) $bureauResults->where('source', 'manual_pv')->sum('count'),
-                'admin_override' => (int) $bureauResults->where('source', 'admin_override')->sum('count'),
-            ];
 
             return [
                 'id'           => $option->id,
@@ -87,7 +76,6 @@ class ResultController extends Controller
                 'procuration'  => (int) $procuration,
                 'pv_count'     => $pvCount,
                 'ecart'        => $pvCount - $systemCount,
-                'by_source'    => $bySource,
                 'numero'       => $option->ordre_affichage,
             ];
         });
@@ -96,24 +84,34 @@ class ResultController extends Controller
         $totalCandidatesSystem      = $results->where('type', 'candidat')->sum('system_count');
         $totalCandidatesProcuration = $results->where('type', 'candidat')->sum('procuration');
 
-        $totalProcuration = VoteLog::whereIn('bureau_vote_id', $bureauIds)
+        // Électeurs individuels (is_manuel = false ou NULL, quantity = 1 par bulletin)
+        $electeursIndividuelsPlus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->tap($onlyIndividuel)->where('action', '+1')->tap($excludeReset)->sum('quantity');
+        $electeursIndividuelsMinus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->tap($onlyIndividuel)->where('action', '-1')->tap($excludeReset)->sum('quantity');
+        $totalElecteursIndividuels = (int) ($electeursIndividuelsPlus - $electeursIndividuelsMinus);
+
+        // Électeurs par procuration (is_manuel = true, quantity = N électeurs représentés)
+        $electeursProcurationPlus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->tap($onlyProcuration)->where('action', '+1')->tap($excludeReset)->sum('quantity');
+        $electeursProcurationMinus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->tap($onlyProcuration)->where('action', '-1')->tap($excludeReset)->sum('quantity');
+        $totalElecteursProcuration = (int) ($electeursProcurationPlus - $electeursProcurationMinus);
+
+        $totalElecteurs = $totalElecteursIndividuels + $totalElecteursProcuration;
+
+        $totalVoixIndividuelles = (int) VoteLog::whereIn('bureau_vote_id', $bureauIds)
+            ->where('is_procuration', false)
+            ->tap($excludeReset)
+            ->sum('quantity');
+
+        $totalVoixProcuration = (int) VoteLog::whereIn('bureau_vote_id', $bureauIds)
             ->where('is_procuration', true)
             ->tap($excludeReset)
             ->sum('quantity');
 
-        // 🆕 Nombre total de bulletins comptés (compteur net +1/-1, indépendant
-        // du nombre de candidats cochés par bulletin — contrairement aux VoteLog).
-        $bulletinsPlus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
-            ->where('action', '+1')
-            ->tap($excludeReset)
-            ->sum('quantity');
-        $bulletinsMinus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
-            ->where('action', '-1')
-            ->tap($excludeReset)
-            ->sum('quantity');
-        $totalBulletins = $bulletinsPlus - $bulletinsMinus;
-
-        $sourceBreakdown = BureauVote::whereIn('bureaux_vote.id', $bureauIds)
+        $sourceBreakdown = \Illuminate\Support\Facades\DB::table('bureaux_vote')
+            ->whereIn('bureaux_vote.id', $bureauIds)
             ->join('bureau_results', 'bureaux_vote.id', '=', 'bureau_results.bureau_vote_id')
             ->selectRaw('bureau_results.source, COUNT(DISTINCT bureaux_vote.id) as count')
             ->groupBy('bureau_results.source')
@@ -124,14 +122,21 @@ class ResultController extends Controller
             'total_candidates_pv'          => $totalCandidatesPv,
             'total_candidates_system'      => $totalCandidatesSystem,
             'total_candidates_procuration' => (int) $totalCandidatesProcuration,
-            'total_procuration'            => (int) $totalProcuration,
-            'total_bulletins'              => (int) $totalBulletins, // 🆕
+
+            'total_electeurs'              => $totalElecteurs,
+            'total_electeurs_individuels'  => $totalElecteursIndividuels,
+            'total_electeurs_procuration'  => $totalElecteursProcuration,
+
+            'total_voix_individuelles'     => $totalVoixIndividuelles,
+            'total_voix_procuration'       => $totalVoixProcuration,
+
             'validated_bureaux'            => $validatedBureaux,
             'total_bureaux'                => $totalBureaux,
             'source_breakdown'             => $sourceBreakdown,
             'status_counts'                => $statusCounts,
             'scope'                        => $scope,
         ]);
+
     }
 
 
