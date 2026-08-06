@@ -108,6 +108,17 @@ class AuditController extends Controller
             $query->where('is_manuel', $request->manuel === '1');
         }
 
+        // Le type de saisie (is_manuel : unitaire/groupée) est indépendant du type
+        // de bureau (is_procuration) qui a produit le bulletin — on distingue les deux.
+        $onlyProcuration = function ($q) {
+            $q->where('is_procuration', true);
+        };
+        $onlyIndividuel = function ($q) {
+            $q->where(function ($qq) {
+                $qq->where('is_procuration', false)->orWhereNull('is_procuration');
+            });
+        };
+
         // Dans AuditController@bulletins, ajoute une clé 'net' dans $stats :
         $stats = [
             // 🎯 VRAI NOMBRE D'ÉLECTEURS (Net : +1 moins -1)
@@ -125,17 +136,26 @@ class AuditController extends Controller
             'unitaire'      => (clone $query)->where('is_manuel', false)->sum('quantity'),
             'plus'          => (clone $query)->where('action', '+1')->sum('quantity'),
             'minus'         => (clone $query)->where('action', '-1')->sum('quantity'),
+
+            // 🆕 Répartition par type de bureau : individuel vs procuration
+            // (net électeurs = valeur des bulletins, distinct du nombre de bulletins eux-mêmes)
+            'individuel_net' => (clone $query)->tap($onlyIndividuel)->where('action', '+1')->sum('quantity')
+                - (clone $query)->tap($onlyIndividuel)->where('action', '-1')->sum('quantity'),
+            'procuration_net' => (clone $query)->tap($onlyProcuration)->where('action', '+1')->sum('quantity')
+                - (clone $query)->tap($onlyProcuration)->where('action', '-1')->sum('quantity'),
+            'procuration_bulletins_count' => (clone $query)->tap($onlyProcuration)->where('action', '+1')->count(),
         ];
 
         $logs = $query->paginate(50)->withQueryString();
 
         $logs->getCollection()->transform(function ($log) {
             return [
-                'id'          => $log->id,
-                'quantity'    => $log->quantity,
-                'action'      => $log->action,
-                'is_manuel'   => $log->is_manuel,
-                'is_restored' => $log->is_restored ?? false,
+                'id'             => $log->id,
+                'quantity'       => $log->quantity,
+                'action'         => $log->action,
+                'is_manuel'      => $log->is_manuel,
+                'is_procuration' => (bool) $log->is_procuration,
+                'is_restored'    => $log->is_restored ?? false,
                 'created_at'  => Carbon::parse($log->created_at)->format('d/m/Y H:i:s'),
                 'bureau'      => $log->bureau ? [
                     'code' => $log->bureau->code,
@@ -152,190 +172,5 @@ class AuditController extends Controller
             'bureaux' => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
             'users'   => User::orderBy('name')->get(['id', 'name']),
         ]);
-    }
-
-    public function electeurs(Request $request)
-    {
-
-        $excludeReset = function ($query) {
-            $query->where(function ($q) {
-                $q->whereNull('is_reset')->orWhere('is_reset', false);
-            });
-        };
-
-        $bureauQuery = BureauVote::query();
-        if ($request->filled('bureau_id')) {
-            $bureauQuery->where('id', $request->bureau_id);
-        }
-        $bureaux = $bureauQuery->orderBy('code')->get(['id', 'code', 'nom']);
-
-        // Seuil configurable via query string pour faciliter la calibration
-        // empirique (ex: ?seuil=8 pour tester 8 secondes au lieu de 5)
-        $seuilSecondes = (int) $request->input('seuil', 5);
-
-        $allSessions = collect();
-        $totalAnnulations = 0;
-
-        foreach ($bureaux as $bureau) {
-
-            $allBulletinLogs = BulletinLog::where('bureau_vote_id', $bureau->id)
-                ->where('is_manuel', false)
-                ->tap($excludeReset)
-                ->orderBy('created_at')
-                ->get(['id', 'user_id', 'action', 'created_at']);
-
-            if ($allBulletinLogs->isEmpty()) {
-                continue;
-            }
-
-            // Reconstruit la pile des clics +1 réellement valides (annule sur -1, LIFO)
-            $stack = [];
-            foreach ($allBulletinLogs as $log) {
-                if ($log->action === '+1') {
-                    $stack[] = $log;
-                } elseif ($log->action === '-1' && count($stack) > 0) {
-                    array_pop($stack);
-                    $totalAnnulations++;
-                }
-            }
-            $clics = collect($stack)->values();
-
-            if ($clics->isEmpty()) {
-                continue;
-            }
-
-            foreach ($clics as $i => $clic) {
-                $debut = $clic->created_at;
-                $fin   = $clics[$i + 1]->created_at ?? now()->addYears(10);
-
-                $votesProcuration = VoteLog::where('bureau_vote_id', $bureau->id)
-                    ->where('is_procuration', true)
-                    ->tap($excludeReset)
-                    ->whereBetween('created_at', [$debut, $fin])
-                    ->orderBy('created_at')
-                    ->get(['quantity', 'user_id', 'vote_option_id', 'created_at']);
-
-                if ($votesProcuration->isNotEmpty()) {
-                    $bulletinsDetectes = $this->detecterBulletinsProcuration($votesProcuration, $seuilSecondes);
-
-                    // 🎯 UNE session par clic (= 1 bulletin/clic physique), mais
-                    // dont les électeurs sont la somme de TOUS les bulletins
-                    // de procuration détectés à l'intérieur, même à quantité
-                    // identique, grâce à l'écart de temps.
-                    $allSessions->push([
-                        'bureau_id'             => $bureau->id,
-                        'bureau'                => $bureau->code . ' — ' . $bureau->nom,
-                        'user_id'               => $clic->user_id,
-                        'type'                  => 'procuration',
-                        'electeurs'             => (int) $bulletinsDetectes->sum('quantity'),
-                        'nb_candidats'          => $votesProcuration->count(),
-                        'nb_bulletins_detectes' => $bulletinsDetectes->count(),
-                        'detail_bulletins'      => $bulletinsDetectes->map(fn($b) => [
-                            'quantity' => (int) $b['quantity'],
-                            'nb_lignes' => $b['lignes']->count(),
-                        ])->values()->all(),
-                        'created_at'            => $debut,
-                    ]);
-                } else {
-                    $allSessions->push([
-                        'bureau_id'             => $bureau->id,
-                        'bureau'                => $bureau->code . ' — ' . $bureau->nom,
-                        'user_id'               => $clic->user_id,
-                        'type'                  => 'individuel',
-                        'electeurs'             => 1,
-                        'nb_candidats'          => null,
-                        'nb_bulletins_detectes' => 1,
-                        'detail_bulletins'      => null,
-                        'created_at'            => $debut,
-                    ]);
-                }
-            }
-        }
-
-        $totalElecteurs             = $allSessions->sum('electeurs');
-        $totalElecteursIndividuels  = $allSessions->where('type', 'individuel')->sum('electeurs');
-        $totalElecteursProcuration  = $allSessions->where('type', 'procuration')->sum('electeurs');
-
-        // 🎯 Correspond toujours au nombre net de clics BulletinLog (ex: 2081)
-        $nbBulletinsTotal        = $allSessions->count();
-        $nbBulletinsIndividuels  = $allSessions->where('type', 'individuel')->count();
-        $nbBulletinsProcuration  = $allSessions->where('type', 'procuration')->count();
-
-        // Fenêtres où plusieurs bulletins de procuration ont été détectés
-        // à l'intérieur d'un même clic (quantité différente OU pause détectée)
-        $nbFenetresMultiBulletins = $allSessions->where('nb_bulletins_detectes', '>', 1)->count();
-
-        $sorted  = $allSessions->sortByDesc('created_at')->values();
-        $page    = (int) $request->input('page', 1);
-        $perPage = 50;
-        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
-            $sorted->forPage($page, $perPage)->values(),
-            $sorted->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
-        return Inertia::render('Admin/Audit/Electeurs', [
-            'sessions' => $paginated,
-            'stats' => [
-                'total_electeurs'              => $totalElecteurs,
-                'total_electeurs_individuels'  => $totalElecteursIndividuels,
-                'total_electeurs_procuration'  => $totalElecteursProcuration,
-                'nb_bulletins_total'           => $nbBulletinsTotal,
-                'nb_bulletins_individuels'     => $nbBulletinsIndividuels,
-                'nb_bulletins_procuration'     => $nbBulletinsProcuration,
-                'nb_annulations'               => $totalAnnulations,
-                'nb_fenetres_multi_bulletins'  => $nbFenetresMultiBulletins,
-                'seuil_secondes'               => $seuilSecondes,
-            ],
-            'filters' => $request->only(['bureau_id']),
-            'bureaux' => BureauVote::orderBy('code')->get(['id', 'code', 'nom']),
-        ]);
-    }
-
-    /**
-     * Regroupe les votes de procuration d'une même fenêtre (entre deux clics
-     * sur le compteur de bulletins) en bulletins distincts. Un nouveau
-     * bulletin est détecté dès que la quantité change OU que l'écart de
-     * temps avec le vote précédent dépasse le seuil — ce second critère
-     * permet de séparer deux bulletins successifs de MÊME quantité, que le
-     * seul regroupement par quantité ne pouvait pas distinguer.
-     */
-    private function detecterBulletinsProcuration($votesProcuration, int $seuilSecondes): \Illuminate\Support\Collection
-    {
-        $votesTries = $votesProcuration->sortBy('created_at')->values();
-        $bulletins  = collect();
-        $courant    = null;
-
-        foreach ($votesTries as $vote) {
-            if ($courant === null) {
-                $courant = [
-                    'quantity' => $vote->quantity,
-                    'lignes'   => collect([$vote]),
-                    'dernier'  => $vote->created_at,
-                ];
-                continue;
-            }
-
-            $gap = \Carbon\Carbon::parse($vote->created_at)->diffInSeconds($courant['dernier']);
-
-            if ((int) $vote->quantity === (int) $courant['quantity'] && $gap <= $seuilSecondes) {
-                $courant['lignes']->push($vote);
-                $courant['dernier'] = $vote->created_at;
-            } else {
-                $bulletins->push($courant);
-                $courant = [
-                    'quantity' => $vote->quantity,
-                    'lignes'   => collect([$vote]),
-                    'dernier'  => $vote->created_at,
-                ];
-            }
-        }
-        if ($courant !== null) {
-            $bulletins->push($courant);
-        }
-
-        return $bulletins;
     }
 }

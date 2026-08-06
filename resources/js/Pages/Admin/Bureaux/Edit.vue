@@ -9,6 +9,7 @@ const props = defineProps({
 const form = useForm({
     code: props.bureau.code,
     nom: props.bureau.nom,
+    is_procuration: !!props.bureau.is_procuration,
 })
 
 const submit = () => {
@@ -38,6 +39,17 @@ const submit = () => {
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                            required />
                     <p v-if="form.errors.nom" class="text-red-600 text-sm mt-1">{{ form.errors.nom }}</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">État du bureau</label>
+                    <div class="flex items-center gap-2">
+                        <input v-model="form.is_procuration" type="checkbox" id="is_procuration"
+                               class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                        <label for="is_procuration" class="text-sm text-gray-700">Bureau de procuration</label>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">Décoché = bureau individuel</p>
+                    <p v-if="form.errors.is_procuration" class="text-red-600 text-sm mt-1">{{ form.errors.is_procuration }}</p>
                 </div>
 
                 <div class="flex gap-3 pt-4">

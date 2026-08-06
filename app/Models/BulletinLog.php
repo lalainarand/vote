@@ -17,13 +17,15 @@ class BulletinLog extends Model
         'action',
         'quantity',
         'is_manuel',
-        'is_reset',     
-        'is_restored',  
+        'is_procuration',
+        'is_reset',
+        'is_restored',
         'created_at',
     ];
     protected $casts = [
-        'created_at' => 'datetime',
-        'is_manuel'  => 'boolean',
+        'created_at'      => 'datetime',
+        'is_manuel'       => 'boolean',
+        'is_procuration'  => 'boolean',
     ];
 
     public function bureau()
@@ -41,14 +43,35 @@ class BulletinLog extends Model
      * Réutilisable partout (CountingController, PvController, etc.)
      * au lieu de dupliquer le calcul +1/-1 dans chaque contrôleur.
      */
-    public static function currentCountForBureau(int $bureauId): int
+    public static function currentCountForBureau(int $bureauId, ?bool $isProcuration = null): int
     {
-        $plus = static::where('bureau_vote_id', $bureauId)
-            ->where('action', '+1')
-            ->sum('quantity');
-        $minus = static::where('bureau_vote_id', $bureauId)
-            ->where('action', '-1')
-            ->sum('quantity');
+        $base = static::where('bureau_vote_id', $bureauId);
+        if ($isProcuration !== null) {
+            $base->where('is_procuration', $isProcuration);
+        }
+
+        $plus = (clone $base)->where('action', '+1')->sum('quantity');
+        $minus = (clone $base)->where('action', '-1')->sum('quantity');
+
+        return $plus - $minus;
+    }
+
+    /**
+     * Compteur système national de bulletins dépouillés, tous bureaux confondus.
+     * Optionnellement filtré sur is_procuration (true = procuration, false = individuel).
+     */
+    public static function currentCountNational(?bool $isProcuration = null, ?iterable $bureauIds = null): int
+    {
+        $base = static::query();
+        if ($bureauIds !== null) {
+            $base->whereIn('bureau_vote_id', $bureauIds);
+        }
+        if ($isProcuration !== null) {
+            $base->where('is_procuration', $isProcuration);
+        }
+
+        $plus = (clone $base)->where('action', '+1')->sum('quantity');
+        $minus = (clone $base)->where('action', '-1')->sum('quantity');
 
         return $plus - $minus;
     }

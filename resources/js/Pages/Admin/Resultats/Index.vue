@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import ResultsBarChart from '@/Components/ResultsBarChart.vue'
 import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
@@ -8,12 +9,15 @@ const props = defineProps({
     total_candidates_pv:           Number,
     total_candidates_system:       Number,
     total_candidates_procuration:  Number,
-    
-    // 🎯 Chiffres réels et officiels
-    total_electeurs:               { type: Number, default: 0 },
+
+    // 🎯 Chiffres réels et officiels (bulletins dépouillés)
+    total_electeurs:                     { type: Number, default: 0 },
+    total_electeurs_individuels:         { type: Number, default: 0 },
+    total_electeurs_procuration:         { type: Number, default: 0 },
+    total_bulletins_procuration_count:   { type: Number, default: 0 },
     total_voix_individuelles:      { type: Number, default: 0 },
     total_voix_procuration:        { type: Number, default: 0 },
-    
+
     validated_bureaux:             Number,
     total_bureaux:                 Number,
     source_breakdown:              Object,
@@ -21,7 +25,7 @@ const props = defineProps({
     scope:                         String,
 })
 
-const activeView = ref('pv')
+const activeView = ref('system')
 
 const candidates = computed(() => props.results.filter(r => r.type === 'candidat'))
 const others     = computed(() => props.results.filter(r => r.type !== 'candidat'))
@@ -34,6 +38,13 @@ const getVotes = (r) => activeView.value === 'pv' ? r.pv_count : r.system_count
 
 const candidatesRanked = computed(() =>
     [...candidates.value].sort((a, b) => getVotes(b) - getVotes(a))
+)
+
+const chartData = computed(() =>
+    candidatesRanked.value.map(r => ({
+        label: r.numero ? `N°${r.numero} - ${r.nom}` : r.nom,
+        value: getVotes(r),
+    }))
 )
 
 const scopeLabel = computed(() =>
@@ -121,14 +132,36 @@ const statusLabels = {
         </div>
     </div>
 
-    <!-- Carte 2 : Total des Électeurs (Chiffre réel, avec répartition) -->
-    <div class="bg-white rounded-xl border border-blue-200 bg-blue-50/30 p-5 shadow-sm">
-    <div class="text-3xl font-bold text-blue-700">
-        {{ (total_electeurs || 0).toLocaleString('fr-FR') }}
+    <!-- Carte 2 : Bulletins à vote individuel -->
+    <div class="bg-white rounded-xl border border-sky-200 bg-sky-50/30 p-5 shadow-sm">
+        <div class="text-3xl font-bold text-sky-700">
+            {{ (total_electeurs_individuels || 0).toLocaleString('fr-FR') }}
+        </div>
+        <div class="text-sm font-semibold text-sky-900 mt-1">Bulletins individuels</div>
     </div>
-    <div class="text-sm font-semibold text-blue-900 mt-1">Total des bulletin</div>
-   
-</div>
+
+    <!-- Carte 3 : Votants par procuration (≠ nombre de bulletins : un bulletin peut représenter plusieurs votants) -->
+    <div class="bg-white rounded-xl border border-amber-200 bg-amber-50/30 p-5 shadow-sm">
+        <div class="text-3xl font-bold text-amber-700">
+            {{ (total_electeurs_procuration || 0).toLocaleString('fr-FR') }}
+        </div>
+        <div class="text-sm font-semibold text-amber-900 mt-1">Votants par procuration</div>
+        <div class="text-[11px] text-amber-700/70 mt-2">
+            via {{ total_bulletins_procuration_count }} bulletin{{ total_bulletins_procuration_count > 1 ? 's' : '' }} de procuration
+        </div>
+    </div>
+
+    <!-- Carte 4 : Total des votants (somme individuel + procuration) -->
+    <div class="bg-white rounded-xl border border-blue-200 bg-blue-50/30 p-5 shadow-sm">
+        <div class="text-3xl font-bold text-blue-700">
+            {{ (total_electeurs || 0).toLocaleString('fr-FR') }}
+        </div>
+        <div class="text-sm font-semibold text-blue-900 mt-1">Total des votants</div>
+        <div class="text-[11px] text-blue-600/70 mt-2">
+            = {{ (total_electeurs_individuels || 0).toLocaleString('fr-FR') }} ind.
+            + {{ (total_electeurs_procuration || 0).toLocaleString('fr-FR') }} proc.
+        </div>
+    </div>
 </div>
 
         <!-- Toggle PV / Système -->
@@ -148,6 +181,17 @@ const statusLabels = {
             </div>
         </div>
 
+        <!-- Visualisation graphique -->
+        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-baseline justify-between">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Visualisation des résultats</h2>
+                <span class="text-xs text-gray-400">{{ activeView === 'pv' ? 'PV papier' : 'Compteur système' }}</span>
+            </div>
+            <div class="p-6">
+                <ResultsBarChart :items="chartData" unit="voix" />
+            </div>
+        </div>
+
         <!-- Résultats candidats -->
         <div class="bg-white rounded-xl border border-gray-100 overflow-hidden mb-6">
             <div class="px-6 py-4 border-b border-gray-100">
@@ -160,7 +204,6 @@ const statusLabels = {
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-8">#</th>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Candidat</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Syst.</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Procuration</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">PV papier</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Écart</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-16">%</th>
@@ -173,12 +216,11 @@ const statusLabels = {
                         <td class="px-4 py-3 text-sm font-medium text-gray-800">
                             <span v-if="r.numero" class="text-gray-500 font-mono mr-1.5">N°{{ r.numero }}</span>- {{ r.nom }}
                         </td>
-                        <td class="px-4 py-3 text-right text-sm font-mono text-gray-400">
-                            {{ (r.system_count || 0).toLocaleString('fr-FR') }}
-                        </td>
-                        <td class="px-4 py-3 text-right text-sm font-mono"
-                            :class="r.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
-                            {{ r.procuration > 0 ? (r.procuration || 0).toLocaleString('fr-FR') : '—' }}
+                        <td class="px-4 py-3 text-right">
+                            <div class="text-sm font-mono text-gray-400">{{ (r.system_count || 0).toLocaleString('fr-FR') }}</div>
+                            <div v-if="r.procuration > 0" class="text-[11px] font-mono text-purple-600 font-semibold mt-0.5">
+                                dont {{ (r.procuration || 0).toLocaleString('fr-FR') }} proc.
+                            </div>
                         </td>
                         <td class="px-4 py-3 text-right text-sm font-mono font-semibold text-gray-900">
                             {{ (r.pv_count || 0).toLocaleString('fr-FR') }}
@@ -219,7 +261,6 @@ const statusLabels = {
                     <tr>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Type</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Syst.</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Procuration</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">PV papier</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Écart</th>
                     </tr>
@@ -227,12 +268,11 @@ const statusLabels = {
                 <tbody class="divide-y divide-gray-50">
                     <tr v-for="r in others" :key="r.id" class="hover:bg-gray-50 transition-colors">
                         <td class="px-4 py-3 text-sm font-medium text-gray-700">{{ r.nom }}</td>
-                        <td class="px-4 py-3 text-right text-sm font-mono text-gray-400">
-                            {{ (r.system_count || 0).toLocaleString('fr-FR') }}
-                        </td>
-                        <td class="px-4 py-3 text-right text-sm font-mono"
-                            :class="r.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
-                            {{ r.procuration > 0 ? (r.procuration || 0).toLocaleString('fr-FR') : '—' }}
+                        <td class="px-4 py-3 text-right">
+                            <div class="text-sm font-mono text-gray-400">{{ (r.system_count || 0).toLocaleString('fr-FR') }}</div>
+                            <div v-if="r.procuration > 0" class="text-[11px] font-mono text-purple-600 font-semibold mt-0.5">
+                                dont {{ (r.procuration || 0).toLocaleString('fr-FR') }} proc.
+                            </div>
                         </td>
                         <td class="px-4 py-3 text-right text-sm font-mono font-semibold text-gray-900">
                             {{ (r.pv_count || 0).toLocaleString('fr-FR') }}

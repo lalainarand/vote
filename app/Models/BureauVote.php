@@ -10,7 +10,7 @@ class BureauVote extends Model
 {
     protected $table = 'bureaux_vote';
 
-    protected $fillable = ['code', 'nom', 'status'];
+    protected $fillable = ['code', 'nom', 'status','is_procuration'];
 
     public function users()
     {

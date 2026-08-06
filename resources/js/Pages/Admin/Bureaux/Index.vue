@@ -98,7 +98,8 @@ const hideTooltip = () => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Code</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Opérateur</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Compteur</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">État</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Réinit.</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photos</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
@@ -110,15 +111,25 @@ const hideTooltip = () => {
                         <td class="px-4 py-3 text-sm text-gray-700">{{ bureau.nom }}</td>
                         <td class="px-4 py-3 text-sm text-gray-700">{{ bureau.user_name }}</td>
 
-                        <!-- Compteur en temps réel -->
-                       <td class="px-4 py-3 text-center">
-    <div class="text-sm font-bold text-gray-900">
-        {{ bureau.electeurs_total }}
-    </div>
-    <div class="text-[11px] text-gray-500 mt-0.5">
-        {{ bureau.electeurs_individuels }} ind. · {{ bureau.electeurs_procuration }} proc.
-    </div>
-</td>
+                        <!-- Statut du bureau (en attente, comptage, validé...) -->
+                        <td class="px-4 py-3 text-center">
+                            <span :class="statusLabel[bureau.status]?.cls ?? 'bg-gray-100 text-gray-600'"
+                                  class="text-xs font-semibold px-2.5 py-1 rounded-full">
+                                {{ statusLabel[bureau.status]?.label ?? bureau.status }}
+                            </span>
+                        </td>
+
+                        <!-- État : procuration ou individuel -->
+                        <td class="px-4 py-3 text-center">
+                            <span v-if="bureau.is_procuration"
+                                  class="bg-amber-100 text-amber-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                Procuration
+                            </span>
+                            <span v-else
+                                  class="bg-sky-100 text-sky-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                Individuelle
+                            </span>
+                        </td>
 
                         <!-- Réinitialisations avec Tooltip (Teleport) -->
                         <td class="px-4 py-3 text-center">

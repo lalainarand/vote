@@ -140,7 +140,7 @@ const filterProcuration = (value) => {
                                   class="bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full">
                                 Procuration
                             </span>
-                            <span v-else class="text-xs text-gray-400">—</span>
+                            <span v-else class="text-xs text-gray-400">Individuelle</span>
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-700">{{ log.user }}</td>
                     </tr>

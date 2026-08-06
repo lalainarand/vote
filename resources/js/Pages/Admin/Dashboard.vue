@@ -44,7 +44,7 @@ const totalPv = computed(() =>
     props.national_results.reduce((s, r) => s + r.pv_count, 0)
 )
 const totalEcart = computed(() => totalPv.value - totalSysteme.value)
-const totalProcurationCandidats = computed(() =>
+const totalProcuration = computed(() =>
     props.national_results.reduce((s, r) => s + r.procuration, 0)
 )
 
@@ -104,8 +104,12 @@ const totalBureaux = computed(() =>
                 <div class="text-xs text-gray-500 mt-1">Saisies admin</div>
             </div>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                <div class="text-3xl font-bold text-purple-600">{{ stats.total_procuration.toLocaleString('fr-FR') }}</div>
-                <div class="text-xs text-gray-500 mt-1">Votes par procuration</div>
+                <div class="text-3xl font-bold text-amber-600">{{ stats.total_bulletins.toLocaleString('fr-FR') }}</div>
+                <div class="text-xs text-gray-500 mt-1">Bulletins dépouillés</div>
+                <div class="text-[11px] text-gray-400 mt-2">
+                    {{ stats.total_bulletins_individuel.toLocaleString('fr-FR') }} ind. ·
+                    {{ stats.total_bulletins_procuration.toLocaleString('fr-FR') }} proc.
+                </div>
             </div>
         </div>
 
@@ -131,10 +135,7 @@ const totalBureaux = computed(() =>
                                     Candidat
                                 </th>
                                 <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
-                                    Syst.
-                                </th>
-                                <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
-                                    Procuration
+                                    Système
                                 </th>
                                 <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
                                     PV papier
@@ -151,14 +152,13 @@ const totalBureaux = computed(() =>
                                 <td class="px-4 py-2.5 font-medium text-gray-800 truncate">
                                     {{ result.nom }}
                                 </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-gray-400 text-xs">
-                                    {{ result.system_count.toLocaleString('fr-FR') }}
+                                <td class="px-3 py-2.5 text-right">
+                                    <div class="font-mono text-gray-400 text-xs">{{ result.system_count.toLocaleString('fr-FR') }}</div>
+                                    <div v-if="result.procuration > 0" class="font-mono text-[10px] text-purple-600 font-semibold mt-0.5">
+                                        dont {{ result.procuration.toLocaleString('fr-FR') }} proc.
+                                    </div>
                                 </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs"
-                                    :class="result.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
-                                    {{ result.procuration > 0 ? result.procuration.toLocaleString('fr-FR') : '—' }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
+                                <td class="px-3 py-2.5 text-right font-mono text-gray-600">
                                     {{ result.pv_count.toLocaleString('fr-FR') }}
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold"
@@ -175,12 +175,11 @@ const totalBureaux = computed(() =>
                             <tr v-for="result in others" :key="result.id"
                                 class="hover:bg-gray-50 transition-colors">
                                 <td class="px-4 py-2.5 text-gray-500 italic truncate">{{ result.nom }}</td>
-                                <td class="px-3 py-2.5 text-right font-mono text-gray-400 text-xs">
-                                    {{ result.system_count.toLocaleString('fr-FR') }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs"
-                                    :class="result.procuration > 0 ? 'text-purple-600 font-semibold' : 'text-gray-300'">
-                                    {{ result.procuration > 0 ? result.procuration.toLocaleString('fr-FR') : '—' }}
+                                <td class="px-3 py-2.5 text-right">
+                                    <div class="font-mono text-gray-400 text-xs">{{ result.system_count.toLocaleString('fr-FR') }}</div>
+                                    <div v-if="result.procuration > 0" class="font-mono text-[10px] text-purple-600 font-semibold mt-0.5">
+                                        dont {{ result.procuration.toLocaleString('fr-FR') }} proc.
+                                    </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-gray-600">
                                     {{ result.pv_count.toLocaleString('fr-FR') }}
@@ -200,11 +199,11 @@ const totalBureaux = computed(() =>
                                 <td class="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                                     Total
                                 </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-400">
-                                    {{ totalSysteme.toLocaleString('fr-FR') }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold text-purple-600">
-                                    {{ totalProcurationCandidats.toLocaleString('fr-FR') }}
+                                <td class="px-3 py-2.5 text-right">
+                                    <div class="font-mono text-xs text-gray-500 font-semibold">{{ totalSysteme.toLocaleString('fr-FR') }}</div>
+                                    <div v-if="totalProcuration > 0" class="font-mono text-[10px] text-purple-600 font-semibold mt-0.5">
+                                        dont {{ totalProcuration.toLocaleString('fr-FR') }} proc.
+                                    </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold text-gray-700">
                                     {{ totalPv.toLocaleString('fr-FR') }}

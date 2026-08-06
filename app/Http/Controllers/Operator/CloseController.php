@@ -39,7 +39,6 @@ class CloseController extends Controller
             'bureau' => $bureau,
             'results' => $results,
             'statistics' => $stats ? [
-                'registered_voters' => $stats->registered_voters,
                 'voters' => $stats->voters,
                 'ballots_found' => $stats->ballots_found,
             ] : null,

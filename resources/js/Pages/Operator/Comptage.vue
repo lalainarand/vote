@@ -14,6 +14,14 @@ const props = defineProps({
         type: Number,
         default: 0,
     },
+    bulletin_count_procuration: {
+        type: Number,
+        default: 0,
+    },
+    bulletin_count_individuel: {
+        type: Number,
+        default: 0,
+    },
 })
 
 const showModal = ref(false) 
@@ -173,6 +181,10 @@ const bulletinCount = ref(props.bulletin_count)
 const bulletinAnimating = ref(false)
 const bulletinDisabled = ref(false)
 
+// Bureau en mode procuration : la saisie du compteur de bulletins se fait
+// obligatoirement par lot (modal), jamais au clic unitaire.
+const isProcurationBureau = computed(() => !!props.bureau.is_procuration)
+
 const triggerBulletinAnimation = () => {
     bulletinAnimating.value = true
     setTimeout(() => { bulletinAnimating.value = false }, 300)
@@ -211,6 +223,16 @@ const voteBulletin = async (action) => {
             console.error('Erreur réseau :', e)
         }
     }
+}
+
+// Clic sur le "+" du compteur de bulletins : saisie unitaire pour un bureau
+// individuel, ouverture du modal de saisie groupée pour un bureau procuration.
+const handleBulletinPlus = () => {
+    if (isProcurationBureau.value) {
+        openBulletinManuelModal()
+        return
+    }
+    voteBulletin('+1')
 }
 
 // ── Modale saisie manuelle groupée du nombre de bulletins ──────────────────
@@ -480,13 +502,28 @@ onUnmounted(() => {
 
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div>
-            <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                Bulletins dépouillés
-            </h2>
+            <div class="flex items-center gap-2 mb-1">
+                <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Bulletins dépouillés
+                </h2>
+                <span v-if="isProcurationBureau"
+                      class="bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    Procuration
+                </span>
+                <span v-else
+                      class="bg-sky-100 text-sky-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    Individuelle
+                </span>
+            </div>
             <p class="text-[11px] text-gray-400 max-w-xs">
-                1 bulletin peut contenir de 1 à 9 votes candidats. Ce compteur est indépendant des compteurs candidats.
+                <template v-if="isProcurationBureau">
+                    Bureau de procuration : le bouton "+" ouvre la saisie du nombre de bulletins à procurer (par lot).
+                </template>
+                <template v-else>
+                    1 bulletin peut contenir de 1 à 9 votes candidats. Ce compteur est indépendant des compteurs candidats.
+                </template>
             </p>
-            
+
             <!-- Aperçu de la dernière photo -->
             <div v-if="selectedImage" class="mt-2 flex items-center gap-2">
                 <img :src="selectedImage" class="w-10 h-10 object-cover rounded border border-gray-200" alt="Dernier bulletin" />
@@ -514,8 +551,9 @@ onUnmounted(() => {
                     −
                 </button>
                 <button
-                    @click="voteBulletin('+1')"
+                    @click="handleBulletinPlus"
                     :disabled="bulletinDisabled"
+                    :title="isProcurationBureau ? 'Saisir le nombre de bulletins à procurer' : 'Ajouter 1 bulletin'"
                     class="bg-amber-500 hover:bg-amber-600 active:scale-95
                            disabled:opacity-50 disabled:cursor-not-allowed
                            text-white font-bold w-11 h-11 rounded-xl text-lg leading-none
@@ -618,46 +656,46 @@ onUnmounted(() => {
                     Aucun candidat ne correspond à "{{ search }}"
                 </div>
 
-                <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-    <div
-        v-for="c in filteredCandidates" :key="c.id"
-        class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col"
-    >
+                <div v-else class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-9 gap-2">
+        <div
+            v-for="c in filteredCandidates" :key="c.id"
+            class="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden flex flex-col"
+        >
         <!-- Photo réduite + badge numéro dominant -->
-        <div class="relative w-full aspect-[5/4] bg-gray-100">
+        <div class="relative w-full aspect-[3/2] bg-gray-100">
             <img
                 :src="getPhotoUrl(c) || '/images/candidat-placeholder.png'"
                 @error="onImgError"
                 :alt="c.nom"
                 class="w-full h-full object-cover"
             />
-            <span class="absolute top-1.5 left-1.5 min-w-[52px] h-10 px-3 rounded-lg bg-blue-600 text-white text-lg font-black flex items-center justify-center shadow-lg ring-2 ring-white">
+            <span class="absolute top-1 left-1 min-w-[32px] h-6 px-1.5 rounded-md bg-blue-600 text-white text-xs font-black flex items-center justify-center shadow ring-1 ring-white">
                 N°{{ c.ordre_affichage ?? c.id }}
             </span>
         </div>
 
-        <div class="p-2 flex flex-col items-center">
+        <div class="p-1.5 flex flex-col items-center">
             <!-- Nom -->
-            <div class="text-xs font-semibold text-gray-900 text-center leading-tight mb-1.5 line-clamp-2 h-8">
+            <div class="text-[10px] font-semibold text-gray-900 text-center leading-tight mb-1 line-clamp-2 h-6">
                 {{ c.nom }}
             </div>
 
             <!-- Compteur -->
             <div
-                class="text-4xl font-extrabold text-blue-600 tabular-nums transition-transform duration-150 mb-1.5"
+                class="text-xl font-extrabold text-blue-600 tabular-nums transition-transform duration-150 mb-1"
                 :class="{ 'scale-110': animating[c.id] }"
             >
                 {{ counts[c.id] }}
             </div>
 
-            <!-- Boutons +1 / -1 -->
-            <div class="flex gap-1 w-full mb-1">
+            <!-- Boutons +1 / -1 (bureau individuel uniquement) -->
+            <div v-if="!isProcurationBureau" class="flex gap-1 w-full">
                 <button
                     @click="vote(c.id, '-1')"
                     :disabled="disabledButtons[c.id] || counts[c.id] === 0"
                     class="flex-1 bg-red-50 hover:bg-red-100 active:scale-95 text-red-600
                            disabled:opacity-40 disabled:cursor-not-allowed
-                           font-bold py-1.5 rounded-md text-sm leading-none
+                           font-bold py-1 rounded text-xs leading-none
                            transition-all duration-100 select-none"
                 >
                     −
@@ -667,19 +705,22 @@ onUnmounted(() => {
                     :disabled="disabledButtons[c.id]"
                     class="flex-1 bg-green-600 hover:bg-green-700 active:scale-95
                            disabled:opacity-50 disabled:cursor-not-allowed
-                           text-white font-bold py-1.5 rounded-md text-sm leading-none
+                           text-white font-bold py-1 rounded text-xs leading-none
                            transition-all duration-100 select-none"
                 >
                     +
                 </button>
             </div>
 
-            <!-- Lien procuration discret -->
+            <!-- Bureau procuration : bouton de saisie mis en avant (remplace le +1/-1) -->
             <button
+                v-if="isProcurationBureau"
                 @click="openProcurationModal(c)"
-                class="text-[10px] text-purple-500 hover:text-purple-700 hover:underline font-medium"
+                class="w-full bg-purple-600 hover:bg-purple-700 active:scale-95
+                       text-white font-bold py-1 rounded text-xs leading-none
+                       transition-all duration-100 select-none"
             >
-                + Procuration
+                Procuration
             </button>
         </div>
     </div>
@@ -705,7 +746,8 @@ onUnmounted(() => {
                                 {{ counts[c.id] }}
                             </div>
                         </div>
-                        <div class="flex gap-2 mb-3">
+                        <!-- Boutons +1 / -1 (bureau individuel uniquement) -->
+                        <div v-if="!isProcurationBureau" class="flex gap-2 mb-3">
                             <button
                                 @click="vote(c.id, '+1')"
                                 :disabled="disabledButtons[c.id]"
@@ -727,11 +769,16 @@ onUnmounted(() => {
                                 −1
                             </button>
                         </div>
+
+                        <!-- Bureau procuration : bouton de saisie mis en avant (remplace le +1/-1) -->
                         <button
+                            v-if="isProcurationBureau"
                             @click="openProcurationModal(c)"
-                            class="text-xs text-purple-600 hover:text-purple-800 hover:underline font-medium"
+                            class="w-full bg-purple-600 hover:bg-purple-700 active:scale-95
+                                   text-white font-bold py-3 rounded-xl
+                                   transition-all duration-100 select-none"
                         >
-                            + Ajouter des votes par procuration
+                            Saisir les votes par procuration
                         </button>
                     </div>
                 </div>
@@ -847,14 +894,23 @@ onUnmounted(() => {
                  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                 <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
                     <div class="flex items-center justify-between mb-1">
-                        <h3 class="text-base font-bold text-gray-900">Saisie groupée — Bulletins</h3>
+                        <h3 class="text-base font-bold text-gray-900">
+                            {{ isProcurationBureau ? 'Bulletins à procurer' : 'Saisie groupée — Bulletins' }}
+                        </h3>
                         <button @click="closeBulletinManuelModal" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
-                    <p class="text-sm text-gray-500 mb-4">Ajouter un nombre de bulletins dépouillés en une seule saisie.</p>
+                    <p class="text-sm text-gray-500 mb-4">
+                        <template v-if="isProcurationBureau">
+                            Ce bureau fonctionne par procuration : saisissez le nombre de bulletins dépouillés pour ce lot.
+                        </template>
+                        <template v-else>
+                            Ajouter un nombre de bulletins dépouillés en une seule saisie.
+                        </template>
+                    </p>
 
                     <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de bulletins</label>
                     <input

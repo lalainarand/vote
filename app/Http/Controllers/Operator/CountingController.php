@@ -73,6 +73,8 @@ class CountingController extends Controller
             'candidates' => $options->where('type', 'candidat')->values(),
             'blanc_nul' => $options->whereIn('type', ['blanc', 'nul'])->values(),
             'bulletin_count' => $this->currentBulletinCount($bureau->id),
+            'bulletin_count_procuration' => BulletinLog::currentCountForBureau($bureau->id, true),
+            'bulletin_count_individuel' => BulletinLog::currentCountForBureau($bureau->id, false),
         ]);
     }
 
@@ -96,6 +98,12 @@ class CountingController extends Controller
 
         if (!in_array($bureau->status, ['pending', 'counting'])) {
             return back()->with('error', 'Le bureau n\'est plus en phase de comptage');
+        }
+
+        if ($bureau->is_procuration && $validated['action'] === '+1') {
+            return response()->json([
+                'error' => 'Ce bureau fonctionne par procuration : utilisez la saisie du nombre de votes par procuration.',
+            ], 422);
         }
 
         $lockKey = "vote_lock_{$user->id}_{$validated['vote_option_id']}";
@@ -240,6 +248,12 @@ class CountingController extends Controller
             return response()->json(['error' => 'Le bureau n\'est plus en phase de comptage'], 403);
         }
 
+        if ($bureau->is_procuration && $validated['action'] === '+1') {
+            return response()->json([
+                'error' => 'Ce bureau fonctionne par procuration : utilisez la saisie groupée du nombre de bulletins.',
+            ], 422);
+        }
+
         $lockKey = "bulletin_lock_{$user->id}_{$bureau->id}";
         if (Cache::has($lockKey)) {
             return response()->json(['error' => 'Clic trop rapide'], 429);
@@ -260,6 +274,7 @@ class CountingController extends Controller
                 'action'         => $validated['action'],
                 'quantity'       => 1,
                 'is_manuel'      => false,
+                'is_procuration' => (bool) $bureau->is_procuration,
                 'created_at'     => now(),
             ]);
         });
@@ -297,6 +312,7 @@ class CountingController extends Controller
                 'action'         => '+1',
                 'quantity'       => $validated['quantity'],
                 'is_manuel'      => true,
+                'is_procuration' => (bool) $bureau->is_procuration,
                 'created_at'     => now(),
             ]);
         });
@@ -431,6 +447,7 @@ class CountingController extends Controller
                     'action'         => $bulletinCount > 0 ? '-1' : '+1',
                     'quantity'       => abs($bulletinCount),
                     'is_manuel'      => true,
+                    'is_procuration' => (bool) $bureau->is_procuration,
                     'is_reset'       => true,
                     'created_at'     => now(),
                 ]);
@@ -559,6 +576,7 @@ class CountingController extends Controller
                         'action'         => $currentBulletins > 0 ? '-1' : '+1',
                         'quantity'       => abs($currentBulletins),
                         'is_manuel'      => true,
+                        'is_procuration' => (bool) $bureau->is_procuration,
                         'is_reset'       => true,
                         'created_at'     => now(),
                     ]);
@@ -600,6 +618,7 @@ class CountingController extends Controller
                     'action'         => '+1',
                     'quantity'       => $snapshot['bulletin_count'],
                     'is_manuel'      => true,
+                    'is_procuration' => (bool) $bureau->is_procuration,
                     'is_restored'    => true,
                     'created_at'     => now(),
                 ]);

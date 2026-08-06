@@ -11,7 +11,6 @@ use App\Models\VoteLog;
 use App\Models\VoteOption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Services\ElecteursCalculatorService;
 use Inertia\Inertia;
 
 class BureauController extends Controller
@@ -21,7 +20,7 @@ class BureauController extends Controller
      */
 
 
-    public function index(Request $request, ElecteursCalculatorService $electeursCalculator)
+    public function index(Request $request)
     {
         $query = BureauVote::with(['users', 'statistics'])
             ->withCount(['bulletinImages' => fn($q) => $q->where('is_reset', false)])
@@ -41,15 +40,15 @@ class BureauController extends Controller
 
         $bureaux = $query->orderBy('code')->paginate(15)->withQueryString();
 
-        $bureaux->getCollection()->transform(function ($bureau) use ($electeursCalculator) {
+        $bureaux->getCollection()->transform(function ($bureau) use ($request) {
             $latestReset = $bureau->voteResets->first();
-            $electeurs   = $electeursCalculator->pourBureau($bureau->id);
 
             return [
                 'id' => $bureau->id,
                 'code' => $bureau->code,
                 'nom' => $bureau->nom,
                 'status' => $bureau->status,
+                'is_procuration' => (bool) $bureau->is_procuration,
                 'user_name' => $bureau->users->first()?->name ?? '—',
                 'bulletin_images_count' => $bureau->bulletin_images_count,
                 'reset_count' => $bureau->vote_resets_count,
@@ -57,10 +56,6 @@ class BureauController extends Controller
                     'reason' => $latestReset->reason ?: 'Aucun motif fourni',
                     'created_at' => \Carbon\Carbon::parse($latestReset->created_at)->format('d/m/Y à H:i'),
                 ] : null,
-
-                'electeurs_individuels' => $electeurs['individuels'],
-                'electeurs_procuration' => $electeurs['procuration'],
-                'electeurs_total'       => $electeurs['total'],
             ];
         });
 
@@ -112,6 +107,7 @@ class BureauController extends Controller
         $validated = $request->validate([
             'code' => 'required|string|max:20|unique:bureaux_vote,code',
             'nom'  => 'required|string|max:255',
+            'is_procuration' => 'boolean',
         ]);
 
         BureauVote::create($validated);
@@ -207,6 +203,7 @@ class BureauController extends Controller
         $validated = $request->validate([
             'code' => 'required|string|max:20|unique:bureaux_vote,code,' . $bureau->id,
             'nom'  => 'required|string|max:255',
+            'is_procuration' => 'boolean',
         ]);
 
         $bureau->update($validated);
@@ -278,7 +275,6 @@ class BureauController extends Controller
                     'nom' => $opt->nom,
                     'type' => $opt->type,
                     'system_count' => ($opt->plus_sum ?? 0) - ($opt->minus_sum ?? 0),
-                    'procuration' => $opt->procuration_sum ?? 0,
                 ];
             });
 

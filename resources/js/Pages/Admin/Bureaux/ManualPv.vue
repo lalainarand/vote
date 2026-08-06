@@ -123,8 +123,18 @@ const submit = (forceAnomaly = false) => {
                     <h2 class="text-lg font-semibold text-gray-900">{{ bureau.nom }}</h2>
                     <p class="text-sm text-gray-500 mt-1">Statut actuel : <span class="font-mono font-medium">{{ bureau.status }}</span></p>
                 </div>
-                <div v-if="bureau.status === 'anomaly'" class="px-3 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">
-                    ANOMALIE
+                <div class="flex items-center gap-2">
+                    <span v-if="bureau.is_procuration"
+                          class="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                       Bureau de vote procuration
+                    </span>
+                    <span v-else
+                          class="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded-full">
+                        Bureau de vote individuelle
+                    </span>
+                    <div v-if="bureau.status === 'anomaly'" class="px-3 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">
+                        ANOMALIE
+                    </div>
                 </div>
             </div>
 
@@ -147,9 +157,7 @@ const submit = (forceAnomaly = false) => {
                                     <span :class="counter.type !== 'candidat' ? 'font-semibold text-gray-700' : ''">
                                         {{ counter.nom }}
                                     </span>
-                                    <div v-if="counter.procuration > 0" class="text-xs text-purple-600 font-normal mt-0.5">
-                                        dont {{ counter.procuration }} par procuration
-                                    </div>
+                                  
                                 </td>
                                 <td class="px-3 py-2 text-center text-sm font-mono text-gray-600">{{ counter.system_count }}</td>
                                 <td class="px-3 py-2 text-center">

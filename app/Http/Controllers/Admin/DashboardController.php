@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\BureauVote;
 use App\Models\VoteLog;
@@ -68,6 +69,11 @@ class DashboardController extends Controller
             ->where('is_procuration', true)
             ->sum('quantity');
 
+        // Bulletins dépouillés, tous bureaux confondus (indépendant du statut de validation)
+        $totalBulletins = BulletinLog::currentCountNational();
+        $totalBulletinsProcuration = BulletinLog::currentCountNational(true);
+        $totalBulletinsIndividuel = BulletinLog::currentCountNational(false);
+
         // Répartition des statuts
         $statusBreakdown = BureauVote::selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
@@ -98,6 +104,9 @@ class DashboardController extends Controller
                 'admin_pv_bureaux' => $adminPvBureaux,
                 'progression' => $progression,
                 'total_procuration' => (int) $totalProcurationNational,
+                'total_bulletins' => (int) $totalBulletins,
+                'total_bulletins_procuration' => (int) $totalBulletinsProcuration,
+                'total_bulletins_individuel' => (int) $totalBulletinsIndividuel,
             ],
             'national_results' => $nationalResults,
             'status_breakdown' => $statusBreakdown,

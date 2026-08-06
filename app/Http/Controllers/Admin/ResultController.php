@@ -42,15 +42,18 @@ class ResultController extends Controller
             });
         };
 
-        // 🆕 is_manuel = true  → procuration (voteManuel/bulletinVoteManuel)
-        // 🆕 is_manuel = false OU NULL → individuel (comportement par défaut
-        //    avant l'introduction de la procuration, pour les anciennes lignes)
+        // Le bulletin hérite du type de bureau qui l'a saisi (colonne is_procuration,
+        // posée à la création par CountingController). On ne se base plus sur
+        // is_manuel : ce flag ne distingue que saisie unitaire / groupée, pas le
+        // type de bureau — les entrées correctives de reset étaient TOUJOURS
+        // is_manuel=true, y compris pour un bureau individuel, ce qui les
+        // classait à tort comme "procuration".
         $onlyProcuration = function ($query) {
-            $query->where('is_manuel', true);
+            $query->where('is_procuration', true);
         };
         $onlyIndividuel = function ($query) {
             $query->where(function ($q) {
-                $q->where('is_manuel', false)->orWhereNull('is_manuel');
+                $q->where('is_procuration', false)->orWhereNull('is_procuration');
             });
         };
 
@@ -84,19 +87,26 @@ class ResultController extends Controller
         $totalCandidatesSystem      = $results->where('type', 'candidat')->sum('system_count');
         $totalCandidatesProcuration = $results->where('type', 'candidat')->sum('procuration');
 
-        // Électeurs individuels (is_manuel = false ou NULL, quantity = 1 par bulletin)
+        // Électeurs individuels (is_procuration = false ou NULL, quantity = 1 par bulletin)
         $electeursIndividuelsPlus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
             ->tap($onlyIndividuel)->where('action', '+1')->tap($excludeReset)->sum('quantity');
         $electeursIndividuelsMinus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
             ->tap($onlyIndividuel)->where('action', '-1')->tap($excludeReset)->sum('quantity');
         $totalElecteursIndividuels = (int) ($electeursIndividuelsPlus - $electeursIndividuelsMinus);
 
-        // Électeurs par procuration (is_manuel = true, quantity = N électeurs représentés)
+        // Électeurs par procuration (is_procuration = true, quantity = N électeurs représentés
+        // par ce lot — une saisie peut regrouper plusieurs votants procurés en une fois)
         $electeursProcurationPlus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
             ->tap($onlyProcuration)->where('action', '+1')->tap($excludeReset)->sum('quantity');
         $electeursProcurationMinus = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
             ->tap($onlyProcuration)->where('action', '-1')->tap($excludeReset)->sum('quantity');
         $totalElecteursProcuration = (int) ($electeursProcurationPlus - $electeursProcurationMinus);
+
+        // Nombre de bulletins de procuration à proprement parler (nombre de saisies /
+        // documents traités), distinct du nombre de votants qu'ils représentent :
+        // 2 bulletins peuvent totaliser 98 votants procurés (ex: 50 + 48).
+        $totalBulletinsProcurationCount = BulletinLog::whereIn('bureau_vote_id', $bureauIds)
+            ->tap($onlyProcuration)->where('action', '+1')->tap($excludeReset)->count();
 
         $totalElecteurs = $totalElecteursIndividuels + $totalElecteursProcuration;
 
@@ -123,9 +133,10 @@ class ResultController extends Controller
             'total_candidates_system'      => $totalCandidatesSystem,
             'total_candidates_procuration' => (int) $totalCandidatesProcuration,
 
-            'total_electeurs'              => $totalElecteurs,
-            'total_electeurs_individuels'  => $totalElecteursIndividuels,
-            'total_electeurs_procuration'  => $totalElecteursProcuration,
+            'total_electeurs'                    => $totalElecteurs,
+            'total_electeurs_individuels'        => $totalElecteursIndividuels,
+            'total_electeurs_procuration'        => $totalElecteursProcuration,
+            'total_bulletins_procuration_count'  => $totalBulletinsProcurationCount,
 
             'total_voix_individuelles'     => $totalVoixIndividuelles,
             'total_voix_procuration'       => $totalVoixProcuration,

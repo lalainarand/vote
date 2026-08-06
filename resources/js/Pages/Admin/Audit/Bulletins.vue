@@ -85,58 +85,77 @@ const filterDateTo = (value) => {
             </Link>
         </div>
 
-        <!-- Statistiques (mises à jour selon les filtres actifs) -->
-        <!-- En-tête des statistiques -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    
-    <!-- Carte 1 : Total Électeurs (NET) -->
-    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-        <div class="text-3xl font-bold text-blue-600">
-            {{ (stats.net_electeurs || 0).toLocaleString('fr-FR') }}
+<!-- Répartition individuel / procuration -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+    <!-- Bulletins individuels -->
+    <div class="bg-white rounded-xl border border-sky-200 bg-sky-50/30 p-5 shadow-sm h-full flex flex-col justify-between">
+        <div class="text-3xl font-bold text-sky-700">
+            {{ (stats.individuel_net || 0).toLocaleString('fr-FR') }}
         </div>
-        <div class="text-sm text-gray-500 mt-1">Total électeurs (Net)</div>
-        <div class="text-xs text-gray-400 mt-1">
-            Résultat net : {{ (stats.plus || 0).toLocaleString('fr-FR') }} (+1) - {{ (stats.minus || 0).toLocaleString('fr-FR') }} (-1)
+        <div class="text-sm font-semibold text-sky-900 mt-1">
+            Bulletins individuels
         </div>
     </div>
 
-    <!-- Carte 2 : Nombre d'opérations -->
-    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-        <div class="text-3xl font-bold text-gray-900">
-            {{ (stats.total_logs || 0).toLocaleString('fr-FR') }}
+    <!-- Votants par procuration -->
+    <div class="bg-white rounded-xl border border-amber-200 bg-amber-50/30 p-5 shadow-sm h-full flex flex-col justify-between">
+        <div>
+            <div class="text-3xl font-bold text-amber-700">
+                {{ (stats.procuration_net || 0).toLocaleString('fr-FR') }}
+            </div>
+            <div class="text-sm font-semibold text-amber-900 mt-1">
+                Votants par procuration
+            </div>
         </div>
-        <div class="text-sm text-gray-500 mt-1">Total des opérations</div>
-        <div class="text-xs text-gray-400 mt-1">
-            Nombre de lignes d'audit enregistrées
+
+        <div class="text-[11px] text-amber-700/70 mt-2">
+            via {{ stats.procuration_bulletins_count || 0 }} bulletin{{ (stats.procuration_bulletins_count || 0) > 1 ? 's' : '' }} de procuration
         </div>
     </div>
 
-    <!-- Carte 3 : Saisie manuelle vs Unitaire -->
-    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-        <div class="text-3xl font-bold text-amber-600">
-            {{ (stats.manuel || 0).toLocaleString('fr-FR') }}
+    <!-- Total (somme) -->
+    <div class="bg-white rounded-xl border border-blue-200 bg-blue-50/30 p-5 shadow-sm h-full flex flex-col justify-between">
+        <div>
+            <div class="text-3xl font-bold text-blue-700">
+                {{ ((stats.individuel_net || 0) + (stats.procuration_net || 0)).toLocaleString('fr-FR') }}
+            </div>
+            <div class="text-sm font-semibold text-blue-900 mt-1">
+                Total des votants
+            </div>
         </div>
-        <div class="text-sm text-gray-500 mt-1">Saisie groupée (Manuel)</div>
-        <div class="text-xs text-gray-400 mt-1">
-            Unitaire : {{ (stats.unitaire || 0).toLocaleString('fr-FR') }}
+
+        <div class="text-[11px] text-blue-600/70 mt-2">
+            = {{ (stats.individuel_net || 0).toLocaleString('fr-FR') }} ind.
+            + {{ (stats.procuration_net || 0).toLocaleString('fr-FR') }} proc.
         </div>
     </div>
 
-    <!-- Carte 4 : Répartition + / - -->
-    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-        <div class="text-sm font-semibold text-gray-700 mb-3">Mouvements</div>
-        <div class="space-y-2 text-sm">
+    <!-- Mouvements -->
+    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm h-full flex flex-col">
+        <div class="text-sm font-semibold text-gray-700 mb-3">
+            Mouvements
+        </div>
+
+        <div class="space-y-2 text-sm mt-auto">
             <div class="flex justify-between items-center">
                 <span class="flex items-center gap-2 text-green-600">
-                    <span class="w-2 h-2 rounded-full bg-green-500"></span> Ajouts (+1)
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    Ajouts (+1)
                 </span>
-                <span class="font-bold">{{ (stats.plus || 0).toLocaleString('fr-FR') }}</span>
+                <span class="font-bold">
+                    {{ (stats.plus || 0).toLocaleString('fr-FR') }}
+                </span>
             </div>
+
             <div class="flex justify-between items-center">
                 <span class="flex items-center gap-2 text-red-600">
-                    <span class="w-2 h-2 rounded-full bg-red-500"></span> Retraits (-1)
+                    <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                    Retraits (-1)
                 </span>
-                <span class="font-bold">{{ (stats.minus || 0).toLocaleString('fr-FR') }}</span>
+                <span class="font-bold">
+                    {{ (stats.minus || 0).toLocaleString('fr-FR') }}
+                </span>
             </div>
         </div>
     </div>
@@ -153,12 +172,13 @@ const filterDateTo = (value) => {
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Action</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Quantité</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Type de saisie</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Type de bureau</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Utilisateur</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="logs.data.length === 0">
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Aucun log</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">Aucun log</td>
                     </tr>
                     <tr v-for="log in logs.data" :key="log.id"
                         :class="log.is_manuel ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-gray-50'">
@@ -182,6 +202,16 @@ const filterDateTo = (value) => {
                                 Groupée
                             </span>
                             <span v-else class="text-xs text-gray-400">Unitaire</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span v-if="log.is_procuration"
+                                  class="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                                Procuration
+                            </span>
+                            <span v-else
+                                  class="bg-sky-100 text-sky-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                                Individuel
+                            </span>
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-700">{{ log.user }}</td>
                     </tr>

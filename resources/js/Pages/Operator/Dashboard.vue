@@ -186,6 +186,28 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                         {{ statusLabel[bureau.status]?.label ?? bureau.status }}
                     </span>
                 </div>
+
+                <!-- État du bureau : procuration ou individuel (affiché en grand) -->
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <div v-if="bureau.is_procuration"
+                         class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                        <div class="bg-amber-100 p-2 rounded-full text-amber-600 shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-6 0 4 4 0 016 0zm6 3a4 4 0 10-3.5-6.5" />
+                            </svg>
+                        </div>
+                        <span class="text-lg font-bold text-amber-800">Bureau de vote procuration</span>
+                    </div>
+                    <div v-else
+                         class="flex items-center gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
+                        <div class="bg-sky-100 p-2 rounded-full text-sky-600 shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                        </div>
+                        <span class="text-lg font-bold text-sky-800">Bureau  de vote individuel</span>
+                    </div>
+                </div>
             </div>
 
             <!-- ── Carte d'information sur les Réinitialisations ─────────────────── -->
@@ -249,20 +271,17 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                     </div>
                 </div>
                 <div class="p-6">
-    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-        <div v-for="counter in counters" :key="counter.id" class="bg-gray-50 rounded-xl overflow-hidden text-center border border-gray-100">
-            <div v-if="counter.type === 'candidat'" class="relative w-full bg-gray-200 overflow-hidden">
+    <div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-9 gap-2">
+        <div v-for="counter in counters" :key="counter.id" class="bg-gray-50 rounded-lg overflow-hidden text-center border border-gray-100">
+            <div v-if="counter.type === 'candidat'" class="relative w-full aspect-[3/2] bg-gray-200 overflow-hidden">
                 <img :src="getPhotoUrl(counter) || '/images/candidat-placeholder.png'" @error="onImgError" :alt="counter.nom" class="w-full h-full object-cover object-top" />
-                <span v-if="counter.ordre_affichage" class="absolute top-1.5 left-1.5 min-w-[36px] h-7 px-1.5 inline-flex items-center justify-center rounded-md bg-blue-600 text-white font-black text-xs shadow-lg ring-2 ring-white">
+                <span v-if="counter.ordre_affichage" class="absolute top-1 left-1 min-w-[28px] h-5 px-1 inline-flex items-center justify-center rounded bg-blue-600 text-white font-black text-[10px] shadow ring-1 ring-white">
                     N°{{ counter.ordre_affichage }}
                 </span>
             </div>
-            <div class="p-2.5">
-                <div class="text-xs text-gray-600 mb-1 truncate font-medium">{{ counter.nom }}</div>
-                <div class="text-xl font-bold text-gray-900">{{ counter.count }}</div>
-                <div v-if="counter.procuration > 0" class="text-[10px] text-purple-600 font-medium mt-0.5">
-                    dont {{ counter.procuration }} proc.
-                </div>
+            <div class="p-1.5">
+                <div class="text-[10px] text-gray-600 mb-0.5 truncate font-medium">{{ counter.nom }}</div>
+                <div class="text-lg font-bold text-gray-900">{{ counter.count }}</div>
             </div>
         </div>
     </div>

@@ -57,10 +57,7 @@ const closeBureau = () => {
             <div v-if="statistics" class="bg-white rounded-xl border border-gray-100 p-6">
                 <h2 class="text-sm font-semibold text-gray-700 mb-4 uppercase">Statistiques</h2>
                 <div class="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <div class="text-2xl font-bold text-gray-900">{{ statistics.registered_voters }}</div>
-                        <div class="text-xs text-gray-500 mt-1">Inscrits</div>
-                    </div>
+                   
                     <div>
                         <div class="text-2xl font-bold text-gray-900">{{ statistics.voters }}</div>
                         <div class="text-xs text-gray-500 mt-1">Votants</div>

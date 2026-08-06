@@ -51,7 +51,6 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
     Route::get('bulletins/audit', [AuditController::class, 'bulletins'])->name('audit.bulletins');
-    Route::get('electeurs/audit', [AuditController::class, 'electeurs'])->name('audit.electeurs');
     Route::get('/debug/procuration-collisions', function () {
     $collisions = \App\Models\VoteLog::where('is_procuration', true)
         ->where(function ($q) {

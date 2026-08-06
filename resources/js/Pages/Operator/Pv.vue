@@ -152,9 +152,6 @@ const submit = () => {
                                 <span :class="counter.type !== 'candidat' ? 'font-semibold text-gray-700' : ''">
                                     {{ counter.nom }}
                                 </span>
-                                <div v-if="counter.procuration > 0" class="text-xs text-purple-600 font-normal mt-0.5">
-                                    dont {{ counter.procuration }} par procuration
-                                </div>
                             </td>
                             <td class="px-3 py-2 text-center font-mono text-gray-600">{{ counter.system_count }}</td>
                             <td class="px-3 py-2 text-center">

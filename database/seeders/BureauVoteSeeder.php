@@ -1,6 +1,5 @@
 <?php
 
-// database/seeders/BureauVoteSeeder.php
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -22,21 +21,15 @@ class BureauVoteSeeder extends Seeder
             ['code' => 'BV009', 'nom' => 'Bureau 9 - Salle principale9'],
             ['code' => 'BV010', 'nom' => 'Bureau 10 - Salle principale10'],
             ['code' => 'BV011', 'nom' => 'Bureau 11 - Salle principale11'],
-            // ['code' => 'BV012', 'nom' => 'Bureau 12 - Salle principale12'],
-            // ['code' => 'BV013', 'nom' => 'Bureau 13 - Salle principale13'],
-            // ['code' => 'BV014', 'nom' => 'Bureau 14 - Salle principale14'],
-            // ['code' => 'BV015', 'nom' => 'Bureau 15 - Salle principale15'],
-            // ['code' => 'BV016', 'nom' => 'Bureau 16 - Salle principale16'],
-            // ['code' => 'BV017', 'nom' => 'Bureau 17 - Salle principale17'],
-            // ['code' => 'BV018', 'nom' => 'Bureau 18 - Salle principale18'],
-            // ['code' => 'BV019', 'nom' => 'Bureau 19 - Salle principale19'],
-            // ['code' => 'BV020', 'nom' => 'Bureau 20 - Salle principale20'],
         ];
 
         foreach ($bureaux as $bv) {
             BureauVote::updateOrCreate(
                 ['code' => $bv['code']],
-                $bv
+                [
+                    'nom' => $bv['nom'],
+                    'is_procuration' => fake()->boolean(),
+                ]
             );
         }
     }

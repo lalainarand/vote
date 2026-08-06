@@ -42,7 +42,6 @@ const onImgError = (e) => {
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photo</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes enregistrés</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Procuration</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
@@ -68,18 +67,18 @@ const onImgError = (e) => {
                         </td>
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ c.nom }}</td>
                         <td class="px-4 py-3 text-center">
-                            <span :class="c.vote_logs_count > 0 ? 'text-orange-600' : 'text-gray-400'"
-                                  class="text-sm font-semibold">
-                                {{ c.vote_logs_count }}
-                            </span>
+                            <div class="flex flex-col items-center gap-1">
+                                <span :class="c.vote_logs_count > 0 ? 'text-orange-600' : 'text-gray-400'"
+                                      class="text-sm font-semibold">
+                                    {{ c.vote_logs_count }}
+                                </span>
+                                <span v-if="c.procuration > 0"
+                                      class="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                                   dont {{ c.procuration }} par procuration
+                                </span>
+                            </div>
                         </td>
-                        <td class="px-4 py-3 text-center">
-                            <span v-if="c.procuration > 0"
-                                  class="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full">
-                                {{ c.procuration }}
-                            </span>
-                            <span v-else class="text-xs text-gray-300">—</span>
-                        </td>
+                       
                         <td class="px-4 py-3 text-right space-x-3">
                             <Link :href="`/admin/candidats/${c.id}/edit`"
                                   class="text-blue-600 hover:text-blue-800 text-sm font-medium">
