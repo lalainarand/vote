@@ -136,7 +136,7 @@ const statusLabels = {
     </svg>
     <span>
         <strong>{{ anomaly_bureaux_count }}</strong> bureau{{ anomaly_bureaux_count > 1 ? 'x' : '' }} en anomalie exclu{{ anomaly_bureaux_count > 1 ? 's' : '' }}
-        des résultats ci-dessous — <strong>{{ anomaly_bureaux_votes.toLocaleString('fr-FR') }}</strong> voix non comptabilisées.
+        des résultats ci-dessous — Toute les voix sont non comptabilisées.
     </span>
 </div>
 

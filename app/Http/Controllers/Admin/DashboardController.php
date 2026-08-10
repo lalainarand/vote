@@ -80,10 +80,12 @@ class DashboardController extends Controller
             - VoteLog::whereIn('bureau_vote_id', $anomalyBureauIds)->where('action', '-1')->sum('quantity')
         );
 
-        // Bulletins dépouillés, tous bureaux confondus (indépendant du statut de validation)
-        $totalBulletins = BulletinLog::currentCountNational();
-        $totalBulletinsProcuration = BulletinLog::currentCountNational(true);
-        $totalBulletinsIndividuel = BulletinLog::currentCountNational(false);
+        // Bulletins dépouillés (tous statuts SAUF anomalie — un bureau marqué anomalie
+        // est exclu de tous les résultats officiels, y compris ce compteur de voix).
+        $nonAnomalyBureauIds = BureauVote::where('status', '!=', 'anomaly')->pluck('id');
+        $totalBulletins = BulletinLog::currentCountNational(null, $nonAnomalyBureauIds);
+        $totalBulletinsProcuration = BulletinLog::currentCountNational(true, $nonAnomalyBureauIds);
+        $totalBulletinsIndividuel = BulletinLog::currentCountNational(false, $nonAnomalyBureauIds);
 
         // Répartition des statuts
         $statusBreakdown = BureauVote::selectRaw('status, COUNT(*) as count')

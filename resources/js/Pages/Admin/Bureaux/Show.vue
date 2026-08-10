@@ -105,17 +105,8 @@ const markAnomaly = () => {
         <!-- Statistiques -->
         <div v-if="statistics" class="grid grid-cols-3 gap-4 mb-6">
             <div class="bg-white rounded-xl border border-gray-100 p-5 text-center">
-                <div class="text-3xl font-bold text-gray-900">{{ statistics.registered_voters }}</div>
-                <div class="text-sm text-gray-500 mt-1">Inscrits</div>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-100 p-5 text-center">
                 <div class="text-3xl font-bold text-gray-900">{{ statistics.voters }}</div>
                 <div class="text-sm text-gray-500 mt-1">Votants</div>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-100 p-5 text-center">
-                <div class="text-3xl font-bold text-gray-900">{{ statistics.ballots_found }}</div>
-                <div class="text-sm text-gray-500 mt-1">Bulletins trouvés</div>
-                <div class="text-xs text-gray-400 mt-1">Source : {{ statistics.pv_source }}</div>
             </div>
         </div>
 

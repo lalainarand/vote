@@ -99,7 +99,7 @@ const totalBureaux = computed(() =>
                 <div class="text-3xl font-bold text-red-600">{{ stats.anomaly_bureaux }}</div>
                 <div class="text-xs text-gray-500 mt-1">Anomalies</div>
                 <div v-if="stats.anomaly_bureaux > 0" class="text-[11px] text-gray-400 mt-2">
-                    {{ stats.anomaly_bureaux_votes.toLocaleString('fr-FR') }} voix exclues des résultats
+                     voix exclues des résultats
                 </div>
             </div>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
