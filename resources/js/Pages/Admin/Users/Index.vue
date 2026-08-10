@@ -1,11 +1,13 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { ref, computed } from 'vue'
 
 const props = defineProps({
-    users:   Object,
-    filters: Object,
+    users:         Object,
+    filters:       Object,
+    pending_users: { type: Array, default: () => [] },
 })
 
 const search = ref(props.filters.search || '')
@@ -33,6 +35,26 @@ const doSearch = () => {
 const deleteUser = (id, name) => {
     if (confirm(`Supprimer l'utilisateur "${name}" ?`)) {
         router.delete(`/admin/users/${id}`)
+    }
+}
+
+// Activation / désactivation du compte (bloque la connexion, ferme la session en cours)
+const toggleActive = (u) => {
+    const action = u.is_active ? 'désactiver' : 'activer'
+    if (confirm(`Confirmer : ${action} le compte de "${u.name}" ?`)) {
+        router.patch(`/admin/users/${u.id}/toggle-active`, {}, { preserveScroll: true })
+    }
+}
+
+// Autorisation d'accès : tant qu'un compte n'est pas approuvé, il reste bloqué
+// sur la page d'attente après connexion (voir EnsureUserIsApproved).
+const toggleApproved = (u) => {
+    if (u.is_approved) {
+        if (confirm(`Révoquer l'autorisation d'accès de "${u.name}" ?`)) {
+            router.patch(`/admin/users/${u.id}/toggle-approved`, {}, { preserveScroll: true })
+        }
+    } else {
+        router.patch(`/admin/users/${u.id}/toggle-approved`, {}, { preserveScroll: true })
     }
 }
 
@@ -66,6 +88,33 @@ const exportUrl = computed(() => {
                 </div>
             </div>
         </template>
+
+        <!-- Comptes en attente d'autorisation -->
+        <div v-if="pending_users.length > 0" class="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <h2 class="text-sm font-semibold text-amber-900">
+                    {{ pending_users.length }} compte{{ pending_users.length > 1 ? 's' : '' }} en attente d'autorisation
+                </h2>
+            </div>
+            <!-- <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div v-for="u in pending_users" :key="u.id"
+                     class="bg-white border border-amber-200 rounded-lg p-4">
+                    <div class="font-medium text-gray-900 text-sm">{{ u.name }}</div>
+                    <div class="border-t border-gray-100 my-2"></div>
+                    <div class="text-xs text-gray-500 mb-3">
+                        Statut : <span class="text-amber-700 font-medium">En attente</span>
+                    </div>
+                    <button @click="toggleApproved(u)"
+                            class="w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold py-2 rounded-lg transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Autoriser l'accès
+                    </button>
+                </div>
+            </div> -->
+        </div>
 
         <!-- Filtres -->
         <div class="bg-white rounded-xl border border-gray-100 p-4 mb-4 flex flex-wrap gap-2 items-center">
@@ -106,13 +155,15 @@ const exportUrl = computed(() => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rôle</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Bureau assigné</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Mot de passe</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Autorisation</th>
                         <!-- <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes saisis</th> -->
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="users.data.length === 0">
-                        <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">
+                        <td colspan="9" class="px-4 py-8 text-center text-sm text-gray-400">
                             Aucun utilisateur trouvé
                         </td>
                     </tr>
@@ -152,26 +203,70 @@ const exportUrl = computed(() => {
                             </div>
                             <span v-else class="text-gray-400 italic text-xs" title="Mot de passe antérieur à cette fonctionnalité, non récupérable">—</span>
                         </td>
+                        <!-- Statut du compte : actif / désactivé -->
+                        <td class="px-4 py-3 text-center">
+                            <button @click="toggleActive(u)"
+                                    class="text-xs font-semibold px-2.5 py-1 rounded-full transition-colors"
+                                    :class="u.is_active
+                                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                        : 'bg-red-100 text-red-700 hover:bg-red-200'"
+                                    :title="u.is_active ? 'Cliquer pour désactiver' : 'Cliquer pour activer'">
+                                {{ u.is_active ? 'Actif' : 'Désactivé' }}
+                            </button>
+                        </td>
+                        <!-- Autorisation d'accès (is_approved) -->
+                        <td class="px-4 py-3 text-center">
+                            <button @click="toggleApproved(u)"
+                                    class="text-xs font-semibold px-2.5 py-1 rounded-full transition-colors"
+                                    :class="u.is_approved
+                                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                        : 'bg-amber-100 text-amber-700 hover:bg-amber-200'"
+                                    :title="u.is_approved ? 'Cliquer pour révoquer' : 'Cliquer pour autoriser'">
+                                {{ u.is_approved ? 'Approuvé' : 'En attente' }}
+                            </button>
+                        </td>
                         <!-- <td class="px-4 py-3 text-center">
                             <span :class="u.vote_logs_count > 0 ? 'text-orange-600' : 'text-gray-400'"
                                   class="text-sm font-semibold">
                                 {{ u.vote_logs_count }}
                             </span>
                         </td> -->
-                        <td class="px-4 py-3 text-right space-x-3">
-                            <Link :href="`/admin/users/${u.id}/edit`"
-                                  class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                Modifier
-                            </Link>
-                            <button v-if="u.vote_logs_count === 0"
-                                    @click="deleteUser(u.id, u.name)"
-                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
-                                Supprimer
-                            </button>
-                            <span v-else class="text-xs text-gray-400 italic" title="Votes existants">
-                                🔒
-                            </span>
-                        </td>
+                        <td class="px-4 py-3 text-right">
+    <div class="flex items-center justify-end gap-2">
+        <!-- Modifier -->
+        <Link
+            :href="`/admin/users/${u.id}/edit`"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg
+                   text-blue-600 hover:text-blue-800 hover:bg-blue-50
+                   transition-colors"
+            title="Modifier"
+        >
+            <PencilSquareIcon class="w-5 h-5" />
+        </Link>
+
+        <!-- Supprimer -->
+        <button
+            v-if="u.vote_logs_count === 0"
+            @click="deleteUser(u.id, u.name)"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg
+                   text-red-600 hover:text-red-800 hover:bg-red-50
+                   transition-colors"
+            title="Supprimer"
+        >
+            <TrashIcon class="w-5 h-5" />
+        </button>
+
+        <!-- Suppression impossible -->
+        <span
+            v-else
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg
+                   text-gray-400 bg-gray-50 cursor-not-allowed"
+            title="Impossible de supprimer : des votes existent"
+        >
+            🔒
+        </span>
+    </div>
+</td>
                     </tr>
                 </tbody>
             </table>
@@ -196,6 +291,8 @@ const exportUrl = computed(() => {
                 <li>Un opérateur ne peut être assigné qu'à un seul bureau</li>
                 <li>Un utilisateur ayant participé à un comptage ne peut pas être supprimé (traçabilité)</li>
                 <li>Mot de passe : uniquement chiffres, lettres et les symboles # * . " @ -</li>
+                <li>Un compte désactivé ne peut plus se connecter (session en cours fermée immédiatement) et ne peut pas se désactiver lui-même</li>
+                <li>Un compte non autorisé peut se connecter mais reste bloqué sur une page d'attente jusqu'à autorisation</li>
             </ul>
         </div>
 

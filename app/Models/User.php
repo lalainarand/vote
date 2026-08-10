@@ -18,6 +18,8 @@ class User extends Authenticatable
         'password_plain',
         'bureau_vote_id',
         'email_verified_at',
+        'is_active',
+        'is_approved',
     ];
 
     // Ni le hash ni la copie en clair du mot de passe ne doivent jamais partir dans
@@ -34,6 +36,8 @@ class User extends Authenticatable
         // Chiffrement réversible (APP_KEY), pas un hash : permet de relire le mot
         // de passe en clair pour l'afficher/l'exporter côté admin.
         'password_plain' => 'encrypted',
+        'is_active'      => 'boolean',
+        'is_approved'    => 'boolean',
     ];
 
     /**

@@ -23,6 +23,13 @@ Route::middleware('auth')->get('/redirect', function () {
         : redirect()->route('operator.dashboard');
 })->name('redirect');
 
+// ── Page d'attente d'autorisation (is_approved = false) ────────────────────
+Route::middleware('auth')->get('/pending-approval', function () {
+    return Inertia::render('Auth/PendingApproval', [
+        'name' => auth()->user()->name,
+    ]);
+})->name('pending-approval');
+
 // ── Routes Admin ──────────────────────────────────────────────────────────
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
 
@@ -45,6 +52,8 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // intercepte "users/export" en tentant de binder "export" comme un ID)
     Route::get('users/export', [UserController::class, 'exportPasswords'])->name('users.export');
     Route::resource('users', UserController::class);
+    Route::patch('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+    Route::patch('users/{user}/toggle-approved', [UserController::class, 'toggleApproved'])->name('users.toggle-approved');
 
     // Résultats globaux
     Route::get('resultats', [ResultController::class, 'index'])->name('resultats.index');

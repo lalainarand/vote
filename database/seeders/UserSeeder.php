@@ -22,23 +22,25 @@ class UserSeeder extends Seeder
                 'password'       => Hash::make('#password98765432101#'),
                 'password_plain' => '#password98765432101#',
                 'bureau_vote_id' => null,
+                'is_active'      => true,
+                'is_approved'    => true
             ]
         );
         $admin->assignRole('admin'); // ← Spatie
 
         // Opérateurs
         $operators = [
-            ['name' => 'Opérateur BV001', 'email' => 'op1@eglise.mg', 'code' => 'BV001'],
-            ['name' => 'Opérateur BV002', 'email' => 'op2@eglise.mg', 'code' => 'BV002'],
-            ['name' => 'Opérateur BV003', 'email' => 'op3@eglise.mg', 'code' => 'BV003'],
-            ['name' => 'Opérateur BV004', 'email' => 'op4@eglise.mg', 'code' => 'BV004'],
-            ['name' => 'Opérateur BV005', 'email' => 'op5@eglise.mg', 'code' => 'BV005'],
-            ['name' => 'Opérateur BV006', 'email' => 'op6@eglise.mg', 'code' => 'BV006'],
-            ['name' => 'Opérateur BV007', 'email' => 'op7@eglise.mg', 'code' => 'BV007'],
-            ['name' => 'Opérateur BV008', 'email' => 'op8@eglise.mg', 'code' => 'BV008'],
-            ['name' => 'Opérateur BV009', 'email' => 'op9@eglise.mg', 'code' => 'BV009'],
-            ['name' => 'Opérateur BV0010', 'email' => 'op10@eglise.mg', 'code' => 'BV010'],
-            ['name' => 'Opérateur BV0011', 'email' => 'op11@eglise.mg', 'code' => 'BV011'],
+            ['name' => 'Opérateur BV001', 'email' => 'op1@eglise.mg', 'code' => 'BV001', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV002', 'email' => 'op2@eglise.mg', 'code' => 'BV002', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV003', 'email' => 'op3@eglise.mg', 'code' => 'BV003', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV004', 'email' => 'op4@eglise.mg', 'code' => 'BV004', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV005', 'email' => 'op5@eglise.mg', 'code' => 'BV005', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV006', 'email' => 'op6@eglise.mg', 'code' => 'BV006', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV007', 'email' => 'op7@eglise.mg', 'code' => 'BV007', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV008', 'email' => 'op8@eglise.mg', 'code' => 'BV008', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV009', 'email' => 'op9@eglise.mg', 'code' => 'BV009', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV0010', 'email' => 'op10@eglise.mg', 'code' => 'BV010', 'is_active' => true, 'is_approved' => false],
+            ['name' => 'Opérateur BV0011', 'email' => 'op11@eglise.mg', 'code' => 'BV011', 'is_active' => true, 'is_approved' => false],
         ];
 
         // On garde les mots de passe en clair uniquement le temps du seed,

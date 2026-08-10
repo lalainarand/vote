@@ -59,15 +59,30 @@ class UserController extends Controller
                 ] : null,
                 'vote_logs_count' => $user->vote_logs_count,
                 'created_at'      => $user->created_at?->format('d/m/Y H:i'),
+                'is_active'       => (bool) $user->is_active,
+                'is_approved'     => (bool) $user->is_approved,
                 // Exposé explicitement (le modèle le cache par défaut) : uniquement
                 // ici, pour l'écran admin de consultation des identifiants.
                 'password_plain'  => $user->password_plain,
             ];
         });
 
+        // Comptes en attente d'autorisation : mis en avant indépendamment des
+        // filtres/pagination ci-dessus, pour que l'admin ne les manque jamais.
+        $pendingUsers = User::with('roles')
+            ->where('is_approved', false)
+            ->orderBy('name')
+            ->get()
+            ->map(fn($user) => [
+                'id'   => $user->id,
+                'name' => $user->name,
+                'role' => $user->roles->first()?->name ?? 'none',
+            ]);
+
         return Inertia::render('Admin/Users/Index', [
-            'users'   => $users,
-            'filters' => $request->only(['role', 'search']),
+            'users'         => $users,
+            'filters'       => $request->only(['role', 'search']),
+            'pending_users' => $pendingUsers,
         ]);
     }
 
@@ -130,6 +145,9 @@ class UserController extends Controller
             'password_plain' => $plainPassword,
             'bureau_vote_id' => $validated['bureau_vote_id'] ?? null,
             'email_verified_at' => now(),
+            // Un compte créé par un admin est actif d'emblée (l'admin peut le
+            // désactiver ensuite depuis la liste s'il change d'avis).
+            'is_active'      => true,
         ]);
 
         $user->assignRole($validated['role']);
@@ -239,6 +257,44 @@ class UserController extends Controller
         return redirect()
             ->route('admin.users.index')
             ->with('success', 'Utilisateur supprimé');
+    }
+
+    /**
+     * Active / désactive un compte. Un compte désactivé ne peut plus se connecter
+     * (message explicite au login) et est déconnecté immédiatement s'il avait déjà
+     * une session ouverte.
+     */
+    public function toggleActive(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return back()->with('error', 'Vous ne pouvez pas désactiver votre propre compte.');
+        }
+
+        $user->update(['is_active' => ! $user->is_active]);
+
+        return back()->with(
+            'success',
+            $user->is_active ? 'Compte activé.' : 'Compte désactivé.'
+        );
+    }
+
+    /**
+     * Autorise / révoque l'accès d'un compte en attente. Tant que is_approved est
+     * faux, l'utilisateur peut se connecter (identifiants + is_active corrects)
+     * mais reste cantonné à la page d'attente (voir EnsureUserIsApproved).
+     */
+    public function toggleApproved(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return back()->with('error', 'Vous ne pouvez pas modifier votre propre autorisation.');
+        }
+
+        $user->update(['is_approved' => ! $user->is_approved]);
+
+        return back()->with(
+            'success',
+            $user->is_approved ? 'Accès autorisé.' : 'Autorisation révoquée.'
+        );
     }
 
     /**

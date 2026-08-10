@@ -50,6 +50,16 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Identifiants corrects, mais le compte a été désactivé par un admin :
+        // on refuse la session malgré tout et on l'explique clairement.
+        if (! Auth::user()->is_active) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Ce compte est désactivé. Contactez un administrateur pour le réactiver.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 
