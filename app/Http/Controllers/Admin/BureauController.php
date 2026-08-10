@@ -358,7 +358,7 @@ class BureauController extends Controller
         });
 
         return redirect()
-            ->route('admin.bureaux.index') // Adaptez si le nom de route est différent
+            ->route('admin.bureaux.index')
             ->with('success', 'PV manuel enregistré avec succès');
     }
 }

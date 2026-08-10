@@ -172,7 +172,7 @@ const hideTooltip = () => {
                                 Modifier
                             </Link>
 
-                            <button v-if="bureau.status !== 'validated'"
+                            <button v-if="bureau.status == 'pending' || bureau.status == 'counting'"
                                     @click="deleteBureau(bureau.id)"
                                     class="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 transition-colors">
                                 Suppr.

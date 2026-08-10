@@ -101,11 +101,11 @@ const totalBureaux = computed(() =>
             </div>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div class="text-3xl font-bold text-purple-600">{{ stats.admin_pv_bureaux }}</div>
-                <div class="text-xs text-gray-500 mt-1">Saisies admin</div>
+                <div class="text-xs text-gray-500 mt-1">validation admin</div>
             </div>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div class="text-3xl font-bold text-amber-600">{{ stats.total_bulletins.toLocaleString('fr-FR') }}</div>
-                <div class="text-xs text-gray-500 mt-1">Bulletins dépouillés</div>
+                <div class="text-xs text-gray-500 mt-1">Votants</div>
                 <div class="text-[11px] text-gray-400 mt-2">
                     {{ stats.total_bulletins_individuel.toLocaleString('fr-FR') }} ind. ·
                     {{ stats.total_bulletins_procuration.toLocaleString('fr-FR') }} proc.
@@ -115,118 +115,7 @@ const totalBureaux = computed(() =>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            <!-- Résultats comparatifs -->
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-100 flex items-baseline justify-between">
-                    <h2 class="text-sm font-semibold text-gray-800">Résultats globaux</h2>
-                    <span class="text-xs text-gray-400">Bureaux validés uniquement</span>
-                </div>
-
-                <div v-if="national_results.length === 0"
-                     class="p-6 text-sm text-gray-400 text-center">
-                    Aucun bureau validé pour l'instant
-                </div>
-
-                <template v-else>
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="bg-gray-50">
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-2/5">
-                                    Candidat
-                                </th>
-                                <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
-                                    Système
-                                </th>
-                                <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
-                                    PV papier
-                                </th>
-                                <th class="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
-                                    Écart
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-50">
-                            <!-- Candidats -->
-                            <tr v-for="result in candidates" :key="result.id"
-                                class="hover:bg-gray-50 transition-colors">
-                                <td class="px-4 py-2.5 font-medium text-gray-800 truncate">
-                                    {{ result.nom }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right">
-                                    <div class="font-mono text-gray-400 text-xs">{{ result.system_count.toLocaleString('fr-FR') }}</div>
-                                    <div v-if="result.procuration > 0" class="font-mono text-[10px] text-purple-600 font-semibold mt-0.5">
-                                        dont {{ result.procuration.toLocaleString('fr-FR') }} proc.
-                                    </div>
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-gray-600">
-                                    {{ result.pv_count.toLocaleString('fr-FR') }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold"
-                                    :class="{
-                                        'text-green-600': result.ecart === 0,
-                                        'text-amber-600': result.ecart > 0,
-                                        'text-red-600':   result.ecart < 0,
-                                    }">
-                                    {{ result.ecart > 0 ? '+' : '' }}{{ result.ecart.toLocaleString('fr-FR') }}
-                                </td>
-                            </tr>
-
-                            <!-- Autres (Blanc, Nul…) -->
-                            <tr v-for="result in others" :key="result.id"
-                                class="hover:bg-gray-50 transition-colors">
-                                <td class="px-4 py-2.5 text-gray-500 italic truncate">{{ result.nom }}</td>
-                                <td class="px-3 py-2.5 text-right">
-                                    <div class="font-mono text-gray-400 text-xs">{{ result.system_count.toLocaleString('fr-FR') }}</div>
-                                    <div v-if="result.procuration > 0" class="font-mono text-[10px] text-purple-600 font-semibold mt-0.5">
-                                        dont {{ result.procuration.toLocaleString('fr-FR') }} proc.
-                                    </div>
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-gray-600">
-                                    {{ result.pv_count.toLocaleString('fr-FR') }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold"
-                                    :class="{
-                                        'text-green-600': result.ecart === 0,
-                                        'text-amber-600': result.ecart > 0,
-                                        'text-red-600':   result.ecart < 0,
-                                    }">
-                                    {{ result.ecart > 0 ? '+' : '' }}{{ result.ecart.toLocaleString('fr-FR') }}
-                                </td>
-                            </tr>
-
-                            <!-- Ligne total -->
-                            <tr class="bg-gray-50">
-                                <td class="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                    Total
-                                </td>
-                                <td class="px-3 py-2.5 text-right">
-                                    <div class="font-mono text-xs text-gray-500 font-semibold">{{ totalSysteme.toLocaleString('fr-FR') }}</div>
-                                    <div v-if="totalProcuration > 0" class="font-mono text-[10px] text-purple-600 font-semibold mt-0.5">
-                                        dont {{ totalProcuration.toLocaleString('fr-FR') }} proc.
-                                    </div>
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold text-gray-700">
-                                    {{ totalPv.toLocaleString('fr-FR') }}
-                                </td>
-                                <td class="px-3 py-2.5 text-right font-mono text-xs font-semibold"
-                                    :class="{
-                                        'text-green-600': totalEcart === 0,
-                                        'text-amber-600': totalEcart > 0,
-                                        'text-red-600':   totalEcart < 0,
-                                    }">
-                                    {{ totalEcart > 0 ? '+' : '' }}{{ totalEcart.toLocaleString('fr-FR') }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </template>
-
-                <div class="px-5 py-3 border-t border-gray-50">
-                    <Link href="/admin/resultats" class="text-xs text-blue-600 font-medium hover:underline">
-                        Voir le détail complet →
-                    </Link>
-                </div>
-            </div>
+           
 
             <!-- État des bureaux -->
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

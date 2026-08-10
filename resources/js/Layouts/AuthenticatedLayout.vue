@@ -21,6 +21,17 @@ const isActive = (item) => {
     return page.url.startsWith(item.href)
 }
 
+// ── Menus déroulants (ex: "Audit" regroupant plusieurs sous-pages) ─────────
+const hasChildren = (item) => Array.isArray(item.children) && item.children.length > 0
+const isChildActive = (item) => hasChildren(item) && item.children.some(isActive)
+
+const openMenus = ref({})
+const isMenuOpen = (item) =>
+    item.label in openMenus.value ? openMenus.value[item.label] : isChildActive(item)
+const toggleMenu = (item) => {
+    openMenus.value[item.label] = !isMenuOpen(item)
+}
+
 const initials = computed(() => {
     const name = user.value?.name ?? ''
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
@@ -55,14 +66,12 @@ const adminNav = [
         icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>`
     },
     {
-        label: 'Audit votes',
-        href: '/admin/audit',
-        icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>`
-    },
-     {
-        label: 'Audit bulletins',
-        href: '/admin/bulletins/audit',
-        icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>`
+        label: 'Audit',
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>`,
+        children: [
+            { label: 'Audit votes', href: '/admin/audit' },
+            { label: 'Audit bulletins', href: '/admin/bulletins/audit' },
+        ],
     },
 ]
 
@@ -150,21 +159,62 @@ const operatorNav = [
 
             <!-- Navigation (scrollable si beaucoup d'items) -->
             <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-                <Link
-                    v-for="item in nav"
-                    :key="item.href"
-                    :href="item.href"
-                    @click="sidebarOpen = false"
-                    class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                           transition-colors duration-150"
-                    :class="isActive(item)
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'"
-                >
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor"
-                         stroke-width="1.8" viewBox="0 0 24 24" v-html="item.icon" />
-                    {{ item.label }}
-                </Link>
+                <template v-for="item in nav" :key="item.label">
+                    <!-- Item simple -->
+                    <Link
+                        v-if="!hasChildren(item)"
+                        :href="item.href"
+                        @click="sidebarOpen = false"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                               transition-colors duration-150"
+                        :class="isActive(item)
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'"
+                    >
+                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor"
+                             stroke-width="1.8" viewBox="0 0 24 24" v-html="item.icon" />
+                        {{ item.label }}
+                    </Link>
+
+                    <!-- Item avec sous-menu déroulant -->
+                    <div v-else>
+                        <button
+                            type="button"
+                            @click="toggleMenu(item)"
+                            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                                   transition-colors duration-150"
+                            :class="isChildActive(item)
+                                ? 'bg-blue-800/60 text-white'
+                                : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'"
+                        >
+                            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" viewBox="0 0 24 24" v-html="item.icon" />
+                            <span class="flex-1 text-left">{{ item.label }}</span>
+                            <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-150"
+                                 :class="{ 'rotate-180': isMenuOpen(item) }"
+                                 fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        <div v-show="isMenuOpen(item)" class="mt-0.5 space-y-0.5">
+                            <Link
+                                v-for="child in item.children"
+                                :key="child.href"
+                                :href="child.href"
+                                @click="sidebarOpen = false"
+                                class="flex items-center gap-2 pl-11 pr-3 py-2 rounded-lg text-sm
+                                       transition-colors duration-150"
+                                :class="isActive(child)
+                                    ? 'bg-blue-600 text-white shadow-sm font-medium'
+                                    : 'text-blue-300 hover:bg-blue-800/50 hover:text-white'"
+                            >
+                                <span class="w-1 h-1 rounded-full bg-current flex-shrink-0"></span>
+                                {{ child.label }}
+                            </Link>
+                        </div>
+                    </div>
+                </template>
             </nav>
 
             <!-- Utilisateur + Logout -->
