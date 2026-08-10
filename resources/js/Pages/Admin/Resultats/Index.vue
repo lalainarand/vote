@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import ResultsBarChart from '@/Components/ResultsBarChart.vue'
+import CandidateResultsRanking from '@/Components/CandidateResultsRanking.vue'
 import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
@@ -10,7 +10,7 @@ const props = defineProps({
     total_candidates_system:       Number,
     total_candidates_procuration:  Number,
 
-    // 🎯 Chiffres réels et officiels (bulletins dépouillés)
+    // Chiffres réels et officiels (bulletins dépouillés)
     total_electeurs:                     { type: Number, default: 0 },
     total_electeurs_individuels:         { type: Number, default: 0 },
     total_electeurs_procuration:         { type: Number, default: 0 },
@@ -23,6 +23,7 @@ const props = defineProps({
     source_breakdown:              Object,
     status_counts:                 Object,
     scope:                         String,
+    seats:                         { type: Number, default: 9 },
 })
 
 const activeView = ref('system')
@@ -40,10 +41,17 @@ const candidatesRanked = computed(() =>
     [...candidates.value].sort((a, b) => getVotes(b) - getVotes(a))
 )
 
-const chartData = computed(() =>
+const rankingItems = computed(() =>
     candidatesRanked.value.map(r => ({
-        label: r.numero ? `N°${r.numero} - ${r.nom}` : r.nom,
+        id: r.id,
+        nom: r.nom,
+        numero: r.numero,
+        photo: r.photo,
         value: getVotes(r),
+        system_count: r.system_count,
+        procuration: r.procuration,
+        pv_count: r.pv_count,
+        ecart: r.ecart,
     }))
 )
 
@@ -116,7 +124,7 @@ const statusLabels = {
     </span>
 </div>
 
-<!-- 🎯 Stats Globales (Chiffres officiels) -->
+<!--  Stats Globales (Chiffres officiels) -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 
     <!-- Carte 1 : Bureaux -->
@@ -181,74 +189,17 @@ const statusLabels = {
             </div>
         </div>
 
-        <!-- Visualisation graphique -->
+        <!-- Classement des candidats (visuel unique : rang + photo + barre + chiffres) -->
         <div class="bg-white rounded-xl border border-gray-100 overflow-hidden mb-6">
             <div class="px-6 py-4 border-b border-gray-100 flex items-baseline justify-between">
-                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Visualisation des résultats</h2>
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Résultats par candidat</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Les {{ seats }} premiers sont élus ({{ seats }} sièges à pourvoir)</p>
+                </div>
                 <span class="text-xs text-gray-400">{{ activeView === 'pv' ? 'PV papier' : 'Compteur système' }}</span>
             </div>
-            <div class="p-6">
-                <ResultsBarChart :items="chartData" unit="voix" />
-            </div>
-        </div>
 
-        <!-- Résultats candidats -->
-        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden mb-6">
-            <div class="px-6 py-4 border-b border-gray-100">
-                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Résultats par candidat</h2>
-            </div>
-
-            <table class="w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-8">#</th>
-                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Candidat</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Syst.</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">PV papier</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Écart</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-16">%</th>
-                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-40"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50">
-                    <tr v-for="(r, idx) in candidatesRanked" :key="r.id" class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3 text-xs text-gray-400 font-mono">{{ idx + 1 }}</td>
-                        <td class="px-4 py-3 text-sm font-medium text-gray-800">
-                            <span v-if="r.numero" class="text-gray-500 font-mono mr-1.5">N°{{ r.numero }}</span>- {{ r.nom }}
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                            <div class="text-sm font-mono text-gray-400">{{ (r.system_count || 0).toLocaleString('fr-FR') }}</div>
-                            <div v-if="r.procuration > 0" class="text-[11px] font-mono text-purple-600 font-semibold mt-0.5">
-                                dont {{ (r.procuration || 0).toLocaleString('fr-FR') }} proc.
-                            </div>
-                        </td>
-                        <td class="px-4 py-3 text-right text-sm font-mono font-semibold text-gray-900">
-                            {{ (r.pv_count || 0).toLocaleString('fr-FR') }}
-                        </td>
-                        <td class="px-4 py-3 text-right text-sm font-mono font-semibold"
-                            :class="{
-                                'text-green-600': r.ecart === 0,
-                                'text-amber-600': r.ecart > 0,
-                                'text-red-600':   r.ecart < 0,
-                            }">
-                            {{ r.ecart > 0 ? '+' : '' }}{{ (r.ecart || 0).toLocaleString('fr-FR') }}
-                        </td>
-                        <td class="px-4 py-3 text-right text-sm font-semibold text-blue-600">
-                            <span v-if="totalActif > 0">
-                                {{ ((getVotes(r) / totalActif) * 100).toFixed(1) }}%
-                            </span>
-                            <span v-else class="text-gray-300">—</span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-blue-500 rounded-full transition-all"
-                                     :style="`width:${totalActif > 0 ? (getVotes(r) / totalActif) * 100 : 0}%`">
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <CandidateResultsRanking :items="rankingItems" :total-actif="totalActif" :top-count="seats" unit="voix" />
         </div>
 
         <!-- Blanc / Nul -->
