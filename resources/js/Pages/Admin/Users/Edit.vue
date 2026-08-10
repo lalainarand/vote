@@ -17,6 +17,17 @@ const form = useForm({
     bureau_vote_id: props.user.bureau_vote_id,
 })
 
+// Mot de passe : uniquement chiffres, lettres (maj/min) et # * . " @ -
+const PASSWORD_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#*."@-'
+const generatePassword = () => {
+    let pwd = ''
+    for (let i = 0; i < 12; i++) {
+        pwd += PASSWORD_CHARS[Math.floor(Math.random() * PASSWORD_CHARS.length)]
+    }
+    form.password = pwd
+    form.password_confirmation = pwd
+}
+
 watch(() => form.role, (newRole) => {
     if (newRole === 'admin') {
         form.bureau_vote_id = null
@@ -58,14 +69,22 @@ const submit = () => {
                             Nouveau mot de passe
                             <span class="text-xs text-gray-400">(laisser vide pour conserver)</span>
                         </label>
-                        <input v-model="form.password" type="password" placeholder="Minimum 8 caractères"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                        <div class="flex gap-2">
+                            <input v-model="form.password" type="text" placeholder="Minimum 8 caractères"
+                                   pattern="[A-Za-z0-9#*.&quot;@\-]+"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono" />
+                            <button type="button" @click="generatePassword"
+                                    class="shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors">
+                                Générer
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Chiffres, lettres, et # * . " @ - uniquement</p>
                         <p v-if="form.errors.password" class="text-red-600 text-sm mt-1">{{ form.errors.password }}</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Confirmation</label>
-                        <input v-model="form.password_confirmation" type="password"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                        <input v-model="form.password_confirmation" type="text"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono" />
                     </div>
                 </div>
 

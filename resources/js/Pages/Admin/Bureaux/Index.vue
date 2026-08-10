@@ -100,6 +100,7 @@ const hideTooltip = () => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Opérateur</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Statut</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">État</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Validation admin</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Réinit.</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Photos</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
@@ -129,6 +130,19 @@ const hideTooltip = () => {
                                   class="bg-sky-100 text-sky-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                                 Individuelle
                             </span>
+                        </td>
+
+                        <!-- Validation admin : confirmation de second niveau posée via l'écran "PV" -->
+                        <td class="px-4 py-3 text-center">
+                            <span v-if="bureau.admin_validated"
+                                  class="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full"
+                                  :title="`Validé le ${bureau.admin_validated_at}`">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                {{ bureau.admin_validated_by_name }}
+                            </span>
+                            <span v-else class="text-gray-300 text-xs">—</span>
                         </td>
 
                         <!-- Réinitialisations avec Tooltip (Teleport) -->
@@ -161,9 +175,9 @@ const hideTooltip = () => {
 
                         <!-- Actions -->
                         <td class="px-4 py-3 text-right space-x-2">
-                            <Link :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
+                            <Link :href="`/admin/bureaux/${bureau.id}`"
                                   class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
-                                  title="Voir ou saisir le PV (données en temps réel)">
+                                  title="Voir la tendance (Système vs PV papier) et valider / marquer anomalie">
                                 PV
                             </Link>
 

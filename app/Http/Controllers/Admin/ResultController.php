@@ -41,9 +41,20 @@ class ResultController extends Controller
         $totalBureaux     = BureauVote::count();
         $validatedBureaux = (int) ($statusCounts['validated'] ?? 0);
 
+        // Un bureau marqué "anomalie" par un admin est TOUJOURS exclu des résultats
+        // (quel que soit le scope), qu'il soit ou non déjà repris dans "Tous les bureaux".
         $bureauIds = $scope === 'validated'
             ? BureauVote::where('status', 'validated')->pluck('id')
-            : BureauVote::pluck('id');
+            : BureauVote::where('status', '!=', 'anomaly')->pluck('id');
+
+        // Statistique de transparence : combien de voix ont été enregistrées dans les
+        // bureaux exclus, pour affichage (dashboard/résultats) sans les compter dans le total.
+        $anomalyBureauIds = BureauVote::where('status', 'anomaly')->pluck('id');
+        $anomalyBureauxCount = $anomalyBureauIds->count();
+        $anomalyVotes = $anomalyBureauIds->isEmpty() ? 0 : (
+            VoteLog::whereIn('bureau_vote_id', $anomalyBureauIds)->where('action', '+1')->sum('quantity')
+            - VoteLog::whereIn('bureau_vote_id', $anomalyBureauIds)->where('action', '-1')->sum('quantity')
+        );
 
         $options = VoteOption::orderBy('ordre_affichage')->get();
 
@@ -167,6 +178,10 @@ class ResultController extends Controller
             'total_bureaux'                      => $totalBureaux,
             'source_breakdown'                  => $sourceBreakdown,
             'status_counts'                      => $statusCounts,
+
+            // Transparence : bureaux exclus des résultats ci-dessus car marqués anomalie
+            'anomaly_bureaux_count'             => $anomalyBureauxCount,
+            'anomaly_bureaux_votes'             => (int) $anomalyVotes,
         ];
     }
 
@@ -193,6 +208,8 @@ class ResultController extends Controller
             'total_bureaux'                      => $data['total_bureaux'],
             'source_breakdown'                  => $data['source_breakdown'],
             'status_counts'                      => $data['status_counts'],
+            'anomaly_bureaux_count'             => $data['anomaly_bureaux_count'],
+            'anomaly_bureaux_votes'             => $data['anomaly_bureaux_votes'],
             'scope'                             => $scope,
             'seats'                              => self::SEATS,
         ]);
@@ -290,6 +307,18 @@ class ResultController extends Controller
         $sheet->getStyle('A' . $r . ':B' . $r)->getFont()->setBold(true);
         $sheet->getStyle('C' . $r)->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('666666');
         $r++;
+
+        // Ligne 5 : bureaux exclus car marqués anomalie (non comptés dans les totaux ci-dessus)
+        if ($data['anomaly_bureaux_count'] > 0) {
+            $sheet->setCellValue(
+                'A' . $r,
+                $data['anomaly_bureaux_count'] . ' bureau(x) en anomalie exclu(s) des résultats ci-dessous ('
+                    . $data['anomaly_bureaux_votes'] . ' voix non comptées)'
+            );
+            $sheet->mergeCells('A' . $r . ':F' . $r);
+            $sheet->getStyle('A' . $r)->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('B45309');
+            $r++;
+        }
 
         // 3. En-têtes du tableau de résultats candidats
         // (nombre de voix = compteur système, utilisé par défaut)

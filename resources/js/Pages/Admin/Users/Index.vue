@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
     users:   Object,
@@ -35,6 +35,18 @@ const deleteUser = (id, name) => {
         router.delete(`/admin/users/${id}`)
     }
 }
+
+// Mot de passe masqué par défaut, révélé au clic (évite l'affichage en clair permanent)
+const revealed = ref({})
+const toggleReveal = (id) => { revealed.value[id] = !revealed.value[id] }
+
+const exportUrl = computed(() => {
+    const params = new URLSearchParams()
+    if (props.filters.role) params.set('role', props.filters.role)
+    if (props.filters.search) params.set('search', props.filters.search)
+    const qs = params.toString()
+    return `/admin/users/export${qs ? '?' + qs : ''}`
+})
 </script>
 
 <template>
@@ -42,10 +54,16 @@ const deleteUser = (id, name) => {
         <template #header>
             <div class="flex items-center justify-between">
                 <h1 class="text-base font-semibold text-gray-800">Utilisateurs</h1>
-                <Link :href="`/admin/users/create`"
-                      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                    + Nouvel utilisateur
-                </Link>
+                <div class="flex items-center gap-2">
+                    <a :href="exportUrl"
+                       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Exporter (avec mots de passe)
+                    </a>
+                    <Link :href="`/admin/users/create`"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                        + Nouvel utilisateur
+                    </Link>
+                </div>
             </div>
         </template>
 
@@ -87,13 +105,14 @@ const deleteUser = (id, name) => {
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Email</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rôle</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Bureau assigné</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Mot de passe</th>
                         <!-- <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Votes saisis</th> -->
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="users.data.length === 0">
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">
+                        <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">
                             Aucun utilisateur trouvé
                         </td>
                     </tr>
@@ -112,6 +131,26 @@ const deleteUser = (id, name) => {
                                 <span class="ml-2">{{ u.bureau.nom }}</span>
                             </template>
                             <span v-else class="text-gray-400 italic">—</span>
+                        </td>
+                        <!-- Mot de passe : masqué par défaut, révélé au clic -->
+                        <td class="px-4 py-3">
+                            <div v-if="u.password_plain" class="flex items-center gap-2">
+                                <span class="font-mono text-xs text-gray-800">
+                                    {{ revealed[u.id] ? u.password_plain : '••••••••••••' }}
+                                </span>
+                                <button @click="toggleReveal(u.id)"
+                                        class="text-gray-400 hover:text-gray-600"
+                                        :title="revealed[u.id] ? 'Masquer' : 'Afficher'">
+                                    <svg v-if="!revealed[u.id]" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                    <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <span v-else class="text-gray-400 italic text-xs" title="Mot de passe antérieur à cette fonctionnalité, non récupérable">—</span>
                         </td>
                         <!-- <td class="px-4 py-3 text-center">
                             <span :class="u.vote_logs_count > 0 ? 'text-orange-600' : 'text-gray-400'"
@@ -156,7 +195,14 @@ const deleteUser = (id, name) => {
             <ul class="list-disc list-inside mt-1 space-y-0.5">
                 <li>Un opérateur ne peut être assigné qu'à un seul bureau</li>
                 <li>Un utilisateur ayant participé à un comptage ne peut pas être supprimé (traçabilité)</li>
+                <li>Mot de passe : uniquement chiffres, lettres et les symboles # * . " @ -</li>
             </ul>
+        </div>
+
+        <!-- Confidentialité -->
+        <div class="mt-3 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
+            🔒 Les mots de passe affichés/exportés ici sont confidentiels. Ne partagez le fichier exporté
+            que par un canal sécurisé, et supprimez-le une fois les identifiants transmis aux opérateurs.
         </div>
     </AuthenticatedLayout>
 </template>

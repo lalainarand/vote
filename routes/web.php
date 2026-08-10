@@ -34,14 +34,16 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
         ->parameters(['bureaux' => 'bureau']);
     Route::patch('bureaux/{bureau}/lock', [BureauController::class, 'lock'])->name('bureaux.lock');
     Route::patch('bureaux/{bureau}/unlock', [BureauController::class, 'unlock'])->name('bureaux.unlock');
-    Route::get('bureaux/{bureau}/pv-manuel', [BureauController::class, 'manualPv'])->name('bureaux.pv-manuel');
-    Route::post('bureaux/{bureau}/pv-manuel', [BureauController::class, 'storeManualPv'])->name('bureaux.pv-manuel.store');
+    Route::post('bureaux/{bureau}/admin-validate', [BureauController::class, 'adminValidate'])->name('bureaux.admin-validate');
     Route::get('/bureaux/{bureau}/photos', [BureauController::class, 'photos'])->name('admin.bureaux.photos');
 
     // Gestion candidats
     Route::resource('candidats', CandidateController::class);
 
     // Gestion utilisateurs
+    // (doit être déclarée AVANT le resource : sinon "users/{user}" du resource
+    // intercepte "users/export" en tentant de binder "export" comme un ID)
+    Route::get('users/export', [UserController::class, 'exportPasswords'])->name('users.export');
     Route::resource('users', UserController::class);
 
     // Résultats globaux

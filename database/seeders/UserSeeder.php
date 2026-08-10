@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Models\BureauVote;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class UserSeeder extends Seeder
 {
@@ -21,6 +20,7 @@ class UserSeeder extends Seeder
                 'name'           => 'Administrateur',
                 'email'          => 'admin@eglise.mg',
                 'password'       => Hash::make('#password98765432101#'),
+                'password_plain' => '#password98765432101#',
                 'bureau_vote_id' => null,
             ]
         );
@@ -53,8 +53,9 @@ class UserSeeder extends Seeder
                 continue;
             }
 
-            // Mot de passe aléatoire et unique par opérateur (12 caractères, majuscules/minuscules/chiffres/symboles)
-            $plainPassword = Str::password(12);
+            // Mot de passe aléatoire et unique par opérateur (12 caractères, conforme à la
+            // politique du projet : chiffres, lettres, et uniquement # * . " @ -)
+            $plainPassword = User::generatePassword();
 
             $user = User::updateOrCreate(
                 ['email' => $op['email']],
@@ -62,6 +63,7 @@ class UserSeeder extends Seeder
                     'name'           => $op['name'],
                     'email'          => $op['email'],
                     'password'       => Hash::make($plainPassword),
+                    'password_plain' => $plainPassword,
                     'bureau_vote_id' => $bureau->id,
                 ]
             );
@@ -84,7 +86,6 @@ class UserSeeder extends Seeder
         }
 
         // Sauvegarde dans un fichier privé pour transmission ultérieure aux opérateurs.
-        // ⚠️ Ne jamais committer ce fichier : il contient des mots de passe en clair.
         if (!empty($credentials)) {
             $lines = collect($credentials)
                 ->map(fn ($c) => "{$c['code']} | {$c['name']} | {$c['email']} | {$c['password']}")

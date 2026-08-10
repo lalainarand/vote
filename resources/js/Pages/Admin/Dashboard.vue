@@ -98,10 +98,13 @@ const totalBureaux = computed(() =>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div class="text-3xl font-bold text-red-600">{{ stats.anomaly_bureaux }}</div>
                 <div class="text-xs text-gray-500 mt-1">Anomalies</div>
+                <div v-if="stats.anomaly_bureaux > 0" class="text-[11px] text-gray-400 mt-2">
+                    {{ stats.anomaly_bureaux_votes.toLocaleString('fr-FR') }} voix exclues des résultats
+                </div>
             </div>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                <div class="text-3xl font-bold text-purple-600">{{ stats.admin_pv_bureaux }}</div>
-                <div class="text-xs text-gray-500 mt-1">validation admin</div>
+                <div class="text-3xl font-bold text-purple-600">{{ stats.admin_validated_bureaux }}</div>
+                <div class="text-xs text-gray-500 mt-1">Validation admin</div>
             </div>
             <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div class="text-3xl font-bold text-amber-600">{{ stats.total_bulletins.toLocaleString('fr-FR') }}</div>

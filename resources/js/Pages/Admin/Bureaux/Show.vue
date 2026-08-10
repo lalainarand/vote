@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -22,6 +22,23 @@ const statusLabel = {
 const candidates = computed(() => props.counters.filter(c => c.type === 'candidat'))
 const totalSystem = computed(() => candidates.value.reduce((s, c) => s + c.system_count, 0))
 const totalPv = computed(() => candidates.value.reduce((s, c) => s + (c.pv_count || 0), 0))
+
+// Validation admin : confirmation de second niveau, une fois le bureau déjà
+// validé par l'opérateur. N'affecte aucun chiffre, sert uniquement à l'affichage.
+const adminValidateBureau = () => {
+    if (confirm('Confirmer la validation admin de ce bureau ?')) {
+        router.post(`/admin/bureaux/${props.bureau.id}/admin-validate`, {}, { preserveScroll: true })
+    }
+}
+
+// Marquer en anomalie : exclut ce bureau des résultats généraux et de l'export Excel
+// (ses voix restent visibles ici et dans les stats dashboard/résultats, mais ne sont
+// plus comptées dans les totaux).
+const markAnomaly = () => {
+    if (confirm('Marquer ce bureau en anomalie ? Ses résultats ne seront plus comptés dans les résultats généraux ni dans l\'export Excel.')) {
+        router.patch(`/admin/bureaux/${props.bureau.id}/lock`, {}, { preserveScroll: true })
+    }
+}
 </script>
 
 <template>
@@ -53,10 +70,35 @@ const totalPv = computed(() => candidates.value.reduce((s, c) => s + (c.pv_count
                         </span>
                     </div>
                 </div>
-                <Link :href="`/admin/bureaux/${bureau.id}/pv-manuel`"
-                      class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                    Saisie PV manuel
-                </Link>
+
+                <!-- 2 actions admin possibles : Valider (confirmation) ou Marquer anomalie (exclusion) -->
+                <div class="flex items-center gap-2">
+                    <span v-if="bureau.status === 'anomaly'"
+                          class="inline-flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        </svg>
+                        Exclu des résultats
+                    </span>
+                    <span v-else-if="bureau.admin_validated_at"
+                          class="inline-flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Validé par {{ bureau.admin_validator?.name }}
+                    </span>
+                    <template v-else>
+                        <button @click="markAnomaly"
+                                class="bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            Marquer anomalie
+                        </button>
+                        <button v-if="bureau.status === 'validated'"
+                                @click="adminValidateBureau"
+                                class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                            Valider (admin)
+                        </button>
+                    </template>
+                </div>
             </div>
         </div>
 

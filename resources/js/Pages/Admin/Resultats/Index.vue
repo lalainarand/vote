@@ -24,6 +24,10 @@ const props = defineProps({
     status_counts:                 Object,
     scope:                         String,
     seats:                         { type: Number, default: 9 },
+
+    // Bureaux marqués anomalie : exclus des totaux ci-dessus, affichés à part
+    anomaly_bureaux_count:         { type: Number, default: 0 },
+    anomaly_bureaux_votes:         { type: Number, default: 0 },
 })
 
 const activeView = ref('system')
@@ -121,6 +125,18 @@ const statusLabels = {
               'bg-green-100 text-green-700': status === 'validated',
           }">
         {{ statusLabels[status] || status }} : {{ count }}
+    </span>
+</div>
+
+<!-- Transparence : bureaux exclus des résultats car marqués anomalie -->
+<div v-if="anomaly_bureaux_count > 0"
+     class="mb-6 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-800">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    <span>
+        <strong>{{ anomaly_bureaux_count }}</strong> bureau{{ anomaly_bureaux_count > 1 ? 'x' : '' }} en anomalie exclu{{ anomaly_bureaux_count > 1 ? 's' : '' }}
+        des résultats ci-dessous — <strong>{{ anomaly_bureaux_votes.toLocaleString('fr-FR') }}</strong> voix non comptabilisées.
     </span>
 </div>
 

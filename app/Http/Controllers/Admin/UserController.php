@@ -8,11 +8,21 @@ use App\Models\BureauVote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class UserController extends Controller
 {
+    /**
+     * Le mot de passe (qu'il soit saisi par l'admin ou auto-généré) ne peut contenir
+     * que des chiffres, des lettres (majuscules/minuscules) et # * . " @ -
+     */
+    private const PASSWORD_REGEX = '/^[A-Za-z0-9#*."@\-]+$/';
+    private const PASSWORD_HINT = 'Uniquement chiffres, lettres, et les symboles # * . " @ -';
+
     /**
      * Liste des utilisateurs avec filtre par rôle
      */
@@ -49,6 +59,9 @@ class UserController extends Controller
                 ] : null,
                 'vote_logs_count' => $user->vote_logs_count,
                 'created_at'      => $user->created_at?->format('d/m/Y H:i'),
+                // Exposé explicitement (le modèle le cache par défaut) : uniquement
+                // ici, pour l'écran admin de consultation des identifiants.
+                'password_plain'  => $user->password_plain,
             ];
         });
 
@@ -81,13 +94,15 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'           => 'required|string|max:255',
             'email'          => 'required|email|max:255|unique:users,email',
-            'password'       => ['required', Password::min(8)],
+            'password'       => ['nullable', 'string', 'min:8', 'max:64', 'confirmed', 'regex:' . self::PASSWORD_REGEX],
             'role'           => ['required', Rule::in(['admin', 'operator'])],
             'bureau_vote_id' => [
                 Rule::requiredIf($request->role === 'operator'),
                 'nullable',
                 'exists:bureaux_vote,id',
             ],
+        ], [
+            'password.regex' => self::PASSWORD_HINT,
         ]);
 
         // Contrainte métier #1 + #2 : un bureau = un opérateur
@@ -105,10 +120,14 @@ class UserController extends Controller
             $validated['bureau_vote_id'] = null;
         }
 
+        // Auto-génère un mot de passe conforme si l'admin n'en a pas saisi un.
+        $plainPassword = $validated['password'] ?: User::generatePassword();
+
         $user = User::create([
             'name'           => $validated['name'],
             'email'          => $validated['email'],
-            'password'       => Hash::make($validated['password']),
+            'password'       => Hash::make($plainPassword),
+            'password_plain' => $plainPassword,
             'bureau_vote_id' => $validated['bureau_vote_id'] ?? null,
             'email_verified_at' => now(),
         ]);
@@ -153,13 +172,15 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'           => 'required|string|max:255',
             'email'          => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'password'       => ['nullable', Password::min(8)],
+            'password'       => ['nullable', 'string', 'min:8', 'max:64', 'confirmed', 'regex:' . self::PASSWORD_REGEX],
             'role'           => ['required', Rule::in(['admin', 'operator'])],
             'bureau_vote_id' => [
                 Rule::requiredIf($request->role === 'operator'),
                 'nullable',
                 'exists:bureaux_vote,id',
             ],
+        ], [
+            'password.regex' => self::PASSWORD_HINT,
         ]);
 
         // Vérification unicité bureau (sauf si c'est le même bureau)
@@ -187,6 +208,7 @@ class UserController extends Controller
 
         if (!empty($validated['password'])) {
             $userData['password'] = Hash::make($validated['password']);
+            $userData['password_plain'] = $validated['password'];
         }
 
         $user->update($userData);
@@ -217,5 +239,76 @@ class UserController extends Controller
         return redirect()
             ->route('admin.users.index')
             ->with('success', 'Utilisateur supprimé');
+    }
+
+    /**
+     * Export Excel des identifiants (nom, email, mot de passe en clair) pour
+     * transmission aux opérateurs. Respecte les mêmes filtres (rôle/recherche)
+     * que la liste. Fichier généré à la volée, jamais écrit sur le serveur.
+     */
+    public function exportPasswords(Request $request)
+    {
+        $query = User::with(['bureauVote', 'roles']);
+
+        if ($request->filled('role')) {
+            $query->role($request->role);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%$search%")
+                  ->orWhere('email', 'like', "%$search%");
+            });
+        }
+
+        $users = $query->orderBy('name')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Identifiants');
+
+        $sheet->setCellValue('A1', 'Identifiants opérateurs / administrateurs');
+        $sheet->mergeCells('A1:E1');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+        $sheet->setCellValue('A2', 'Généré le ' . now()->format('d/m/Y H:i') . ' — CONFIDENTIEL, à ne pas diffuser publiquement');
+        $sheet->mergeCells('A2:E2');
+        $sheet->getStyle('A2')->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('B91C1C');
+
+        $headerRow = 4;
+        $headers = ['Bureau', 'Nom', 'Email', 'Rôle', 'Mot de passe'];
+        $col = 'A';
+        foreach ($headers as $h) {
+            $sheet->setCellValue($col . $headerRow, $h);
+            $col++;
+        }
+        $sheet->getStyle('A' . $headerRow . ':E' . $headerRow)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle('A' . $headerRow . ':E' . $headerRow)->getFill()
+            ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1F2937');
+        $sheet->getStyle('A' . $headerRow . ':E' . $headerRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $row = $headerRow + 1;
+        foreach ($users as $user) {
+            $sheet->setCellValue('A' . $row, $user->bureauVote?->code ?? '—');
+            $sheet->setCellValue('B' . $row, $user->name);
+            $sheet->setCellValue('C' . $row, $user->email);
+            $sheet->setCellValue('D' . $row, $user->roles->first()?->name === 'admin' ? 'Administrateur' : 'Opérateur');
+            $sheet->setCellValue('E' . $row, $user->password_plain ?? '(mot de passe antérieur, non récupérable)');
+            $row++;
+        }
+
+        foreach (['A', 'B', 'C', 'D', 'E'] as $c) {
+            $sheet->getColumnDimension($c)->setAutoSize(true);
+        }
+
+        $filename = 'identifiants_' . now()->format('Y-m-d_His') . '.xlsx';
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 }

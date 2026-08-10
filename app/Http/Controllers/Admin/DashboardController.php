@@ -18,7 +18,9 @@ class DashboardController extends Controller
         $totalBureaux = BureauVote::count();
         $validatedBureaux = BureauVote::where('status', 'validated')->count();
         $anomalyBureaux = BureauVote::where('status', 'anomaly')->count();
-        $adminPvBureaux = BureauVote::where('status', 'pv_admin')->count();
+        // Validation admin : confirmation de second niveau (purement déclarative,
+        // ne modifie aucun chiffre), posée après que l'opérateur a validé son bureau.
+        $adminValidatedBureaux = BureauVote::whereNotNull('admin_validated_at')->count();
 
         $progression = $totalBureaux > 0
             ? round(($validatedBureaux / $totalBureaux) * 100)
@@ -69,6 +71,15 @@ class DashboardController extends Controller
             ->where('is_procuration', true)
             ->sum('quantity');
 
+        // Transparence : voix enregistrées dans des bureaux marqués anomalie, exclues
+        // des résultats nationaux ci-dessus (déjà limités aux bureaux validés) mais
+        // affichées à part pour que rien ne disparaisse silencieusement.
+        $anomalyBureauIds = BureauVote::where('status', 'anomaly')->pluck('id');
+        $anomalyVotes = $anomalyBureauIds->isEmpty() ? 0 : (
+            VoteLog::whereIn('bureau_vote_id', $anomalyBureauIds)->where('action', '+1')->sum('quantity')
+            - VoteLog::whereIn('bureau_vote_id', $anomalyBureauIds)->where('action', '-1')->sum('quantity')
+        );
+
         // Bulletins dépouillés, tous bureaux confondus (indépendant du statut de validation)
         $totalBulletins = BulletinLog::currentCountNational();
         $totalBulletinsProcuration = BulletinLog::currentCountNational(true);
@@ -88,25 +99,18 @@ class DashboardController extends Controller
                 'link' => route('admin.bureaux.index', ['status' => 'anomaly']),
             ];
         }
-        if ($adminPvBureaux > 0) {
-            $alerts[] = [
-                'type' => 'warning',
-                'message' => "$adminPvBureaux bureau(x) avec saisie PV admin",
-                'link' => route('admin.bureaux.index', ['status' => 'pv_admin']),
-            ];
-        }
-
         return Inertia::render('Admin/Dashboard', [
             'stats' => [
                 'total_bureaux' => $totalBureaux,
                 'validated_bureaux' => $validatedBureaux,
                 'anomaly_bureaux' => $anomalyBureaux,
-                'admin_pv_bureaux' => $adminPvBureaux,
+                'admin_validated_bureaux' => $adminValidatedBureaux,
                 'progression' => $progression,
                 'total_procuration' => (int) $totalProcurationNational,
                 'total_bulletins' => (int) $totalBulletins,
                 'total_bulletins_procuration' => (int) $totalBulletinsProcuration,
                 'total_bulletins_individuel' => (int) $totalBulletinsIndividuel,
+                'anomaly_bureaux_votes' => (int) $anomalyVotes,
             ],
             'national_results' => $nationalResults,
             'status_breakdown' => $statusBreakdown,

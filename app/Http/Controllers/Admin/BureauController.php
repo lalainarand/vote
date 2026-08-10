@@ -3,14 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\BulletinLog;
-use App\Models\BureauResult;
-use App\Models\BureauStatistic;
 use App\Models\BureauVote;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class BureauController extends Controller
@@ -22,7 +19,7 @@ class BureauController extends Controller
 
     public function index(Request $request)
     {
-        $query = BureauVote::with(['users', 'statistics'])
+        $query = BureauVote::with(['users', 'statistics', 'adminValidator:id,name'])
             ->withCount(['bulletinImages' => fn($q) => $q->where('is_reset', false)])
             ->withCount('voteResets')
             ->with(['voteResets' => function ($q) {
@@ -49,6 +46,9 @@ class BureauController extends Controller
                 'nom' => $bureau->nom,
                 'status' => $bureau->status,
                 'is_procuration' => (bool) $bureau->is_procuration,
+                'admin_validated' => $bureau->admin_validated_at !== null,
+                'admin_validated_by_name' => $bureau->adminValidator?->name,
+                'admin_validated_at' => $bureau->admin_validated_at?->format('d/m/Y à H:i'),
                 'user_name' => $bureau->users->first()?->name ?? '—',
                 'bulletin_images_count' => $bureau->bulletin_images_count,
                 'reset_count' => $bureau->vote_resets_count,
@@ -123,7 +123,7 @@ class BureauController extends Controller
 
     public function show(BureauVote $bureau)
     {
-        $bureau->load(['users', 'statistics', 'bureauResults.voteOption', 'voteLogs.user']);
+        $bureau->load(['users', 'statistics', 'bureauResults.voteOption', 'voteLogs.user', 'adminValidator:id,name']);
 
         // Compteurs système
         $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($opt) use ($bureau) {
@@ -165,7 +165,7 @@ class BureauController extends Controller
                 'action' => $log->action,
                 'option' => $log->voteOption?->nom,
                 'user' => $log->user?->name,
-                'created_at' => $log->created_at->format('H:i:s'),
+               'created_at' => Carbon::parse($log->created_at)->format('H:i:s'),
             ]);
 
         // Statistiques
@@ -256,109 +256,32 @@ class BureauController extends Controller
     }
 
     /**
-     * Écran de saisie PV manuelle admin
+     * Validation admin : confirmation de second niveau, APRÈS que l'opérateur ait
+     * lui-même clôturé/validé son bureau (status = 'validated'). Purement déclaratif :
+     * ne modifie ni les votes ni le PV, se contente de tracer qui a confirmé et quand,
+     * pour affichage (badge "Validé par ...").
      */
-
-    public function manualPv(BureauVote $bureau)
+    public function adminValidate(BureauVote $bureau)
     {
-        $bureau->load(['statistics', 'bureauResults']);
+        if ($bureau->status !== 'validated') {
+            return redirect()
+                ->back()
+                ->with('error', 'Ce bureau doit d\'abord être validé par l\'opérateur.');
+        }
 
-        $counters = VoteOption::orderBy('ordre_affichage')
-            ->select('id', 'nom', 'type', 'ordre_affichage')
-            ->withSum(['voteLogs as plus_sum' => fn($q) => $q->where('action', '+1')->where('bureau_vote_id', $bureau->id)], 'quantity')
-            ->withSum(['voteLogs as minus_sum' => fn($q) => $q->where('action', '-1')->where('bureau_vote_id', $bureau->id)], 'quantity')
-            ->withSum(['voteLogs as procuration_sum' => fn($q) => $q->where('is_procuration', true)->where('bureau_vote_id', $bureau->id)], 'quantity')
-            ->get()
-            ->map(function ($opt) {
-                return [
-                    'id' => $opt->id,
-                    'nom' => $opt->nom,
-                    'type' => $opt->type,
-                    'system_count' => ($opt->plus_sum ?? 0) - ($opt->minus_sum ?? 0),
-                ];
-            });
+        if ($bureau->admin_validated_at !== null) {
+            return redirect()
+                ->back()
+                ->with('error', 'Ce bureau a déjà été validé par un admin.');
+        }
 
-        $pvValues = $bureau->bureauResults->pluck('count', 'vote_option_id')->toArray();
-
-        // Cette partie était déjà correcte car elle contenait déjà le where('bureau_vote_id', $bureau->id)
-        $systemBallotsCount = BulletinLog::where('bureau_vote_id', $bureau->id)
-            ->selectRaw("SUM(CASE WHEN action = '+1' THEN quantity ELSE 0 END) - SUM(CASE WHEN action = '-1' THEN quantity ELSE 0 END) as total")
-            ->value('total') ?? 0;
-
-        return Inertia::render('Admin/Bureaux/ManualPv', [
-            'bureau' => $bureau,
-            'counters' => $counters,
-            'pv_values' => $pvValues,
-            'system_ballots_count' => (int) $systemBallotsCount,
+        $bureau->update([
+            'admin_validated_by' => auth()->id(),
+            'admin_validated_at' => now(),
         ]);
-    }
-
-    /**
-     * Enregistrement PV manuel admin
-     */
-    public function storeManualPv(Request $request, BureauVote $bureau)
-    {
-        $validated = $request->validate([
-            'pv_data' => 'required|array',
-            'pv_data.*.vote_option_id' => 'required|exists:vote_options,id',
-            'pv_data.*.count' => 'required|integer|min:0',
-            'ballots_found' => 'required|integer|min:0', // Votants sera égal à ceci
-            'note' => 'nullable|string|max:1000',
-            'mark_anomaly' => 'boolean',
-        ]);
-
-        DB::transaction(function () use ($validated, $bureau) {
-            // Déterminer la source
-            $source = $bureau->voteLogs()->exists() ? 'admin_override' : 'manual_pv';
-
-            // 1. Enregistrer les résultats par candidat/option
-            foreach ($validated['pv_data'] as $pv) {
-                BureauResult::updateOrCreate(
-                    [
-                        'bureau_vote_id' => $bureau->id,
-                        'vote_option_id' => $pv['vote_option_id'],
-                    ],
-                    [
-                        'count' => $pv['count'],
-                        'source' => $source,
-                        'entered_by' => auth()->id(),
-                        'entered_at' => now(),
-                    ]
-                );
-            }
-
-            // 2. Enregistrer les statistiques (voters = ballots_found)
-            BureauStatistic::updateOrCreate(
-                ['bureau_vote_id' => $bureau->id],
-                [
-                    'voters' => $validated['ballots_found'],
-                    'ballots_found' => $validated['ballots_found'],
-                    'pv_source' => 'admin',
-                    'pv_note' => $validated['note'] ?? null,
-                ]
-            );
-
-            // 3. Statut du bureau
-            $newStatus = $validated['mark_anomaly'] ? 'anomaly' : 'pv_admin';
-            $bureau->update(['status' => $newStatus]);
-
-            // 4. Log dans vote_logs pour traçabilité (conservé de votre logique originale)
-            $firstCandidate = VoteOption::where('type', 'candidat')->first();
-            if ($firstCandidate) {
-                VoteLog::create([
-                    'bureau_vote_id' => $bureau->id,
-                    'vote_option_id' => $firstCandidate->id,
-                    'user_id' => auth()->id(),
-                    'action' => '+1',
-                    'quantity' => 0, // Quantité 0 pour ne pas fausser les comptes, juste pour la trace
-                    'is_procuration' => false,
-                    'created_at' => now(),
-                ]);
-            }
-        });
 
         return redirect()
-            ->route('admin.bureaux.index')
-            ->with('success', 'PV manuel enregistré avec succès');
+            ->back()
+            ->with('success', 'Bureau validé côté admin.');
     }
 }
