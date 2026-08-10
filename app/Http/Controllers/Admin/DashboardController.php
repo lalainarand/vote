@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BulletinLog;
 use App\Models\BureauResult;
 use App\Models\BureauVote;
+use App\Models\DeviceLoginAttempt;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
 use Inertia\Inertia;
@@ -92,6 +93,9 @@ class DashboardController extends Controller
             ->groupBy('status')
             ->pluck('count', 'status');
 
+        // Tentatives récentes depuis un appareil non autorisé (dernières 24h)
+        $recentDeviceAttempts = DeviceLoginAttempt::where('created_at', '>=', now()->subDay())->count();
+
         // Alertes
         $alerts = [];
         if ($anomalyBureaux > 0) {
@@ -99,6 +103,13 @@ class DashboardController extends Controller
                 'type' => 'error',
                 'message' => "$anomalyBureaux bureau(x) en anomalie",
                 'link' => route('admin.bureaux.index', ['status' => 'anomaly']),
+            ];
+        }
+        if ($recentDeviceAttempts > 0) {
+            $alerts[] = [
+                'type' => 'error',
+                'message' => "🚨 $recentDeviceAttempts tentative(s) depuis un appareil non autorisé (24h)",
+                'link' => route('admin.devices.index'),
             ];
         }
         return Inertia::render('Admin/Dashboard', [

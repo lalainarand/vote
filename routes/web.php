@@ -8,6 +8,8 @@ use App\Http\Controllers\Admin\CandidateController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ResultController;
 use App\Http\Controllers\Admin\AuditController;
+use App\Http\Controllers\Admin\DeviceController;
+use App\Http\Controllers\DeviceRegistrationController;
 use App\Http\Controllers\Operator\DashboardController as OperatorDashboardController;
 use App\Http\Controllers\Operator\CountingController;
 use App\Http\Controllers\Operator\PvEntryController;
@@ -29,6 +31,9 @@ Route::middleware('auth')->get('/pending-approval', function () {
         'name' => auth()->user()->name,
     ]);
 })->name('pending-approval');
+
+// ── Appairage d'une tablette (public : une tablette neuve n'a pas de session) ─
+Route::get('/device/pair/{token}', [DeviceRegistrationController::class, 'pair'])->name('device.pair');
 
 // ── Routes Admin ──────────────────────────────────────────────────────────
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -62,6 +67,13 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
     Route::get('bulletins/audit', [AuditController::class, 'bulletins'])->name('audit.bulletins');
+
+    // Appareils autorisés (les 26 tablettes)
+    Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
+    Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
+    Route::post('devices/bulk', [DeviceController::class, 'storeBulk'])->name('devices.store-bulk');
+    Route::patch('devices/{device}/toggle-approved', [DeviceController::class, 'toggleApproved'])->name('devices.toggle-approved');
+    Route::delete('devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
     Route::get('/debug/procuration-collisions', function () {
     $collisions = \App\Models\VoteLog::where('is_procuration', true)
         ->where(function ($q) {
