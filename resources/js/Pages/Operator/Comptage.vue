@@ -553,7 +553,7 @@ onUnmounted(() => {
                 <button
                     @click="handleBulletinPlus"
                     :disabled="bulletinDisabled"
-                    :title="isProcurationBureau ? 'Saisir le nombre de bulletins à procurer' : 'Ajouter 1 bulletin'"
+                    :title="isProcurationBureau ? 'Saisir le nombre de votants à procurer' : 'Ajouter 1 bulletin'"
                     class="bg-amber-500 hover:bg-amber-600 active:scale-95
                            disabled:opacity-50 disabled:cursor-not-allowed
                            text-white font-bold w-11 h-11 rounded-xl text-lg leading-none
@@ -905,14 +905,14 @@ onUnmounted(() => {
                     </div>
                     <p class="text-sm text-gray-500 mb-4">
                         <template v-if="isProcurationBureau">
-                            Ce bureau fonctionne par procuration : saisissez le nombre de bulletins dépouillés pour ce lot.
+                            Ce bureau fonctionne par procuration : saisissez le nombre de votants à procurer.
                         </template>
                         <template v-else>
                             Ajouter un nombre de bulletins dépouillés en une seule saisie.
                         </template>
                     </p>
 
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de bulletins</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de votants dans bulletins</label>
                     <input
                         v-model.number="bulletinManuelModal.quantity"
                         type="number"

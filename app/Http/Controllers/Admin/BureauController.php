@@ -17,6 +17,7 @@ class BureauController extends Controller
      */
 
 
+
     public function index(Request $request)
     {
         $query = BureauVote::with(['users', 'statistics', 'adminValidator:id,name'])
@@ -126,15 +127,19 @@ class BureauController extends Controller
         $bureau->load(['users', 'statistics', 'bureauResults.voteOption', 'voteLogs.user', 'adminValidator:id,name']);
 
         // Compteurs système
+        // ⚠️ sum('quantity'), pas count() : un vote par procuration est UNE ligne
+        // VoteLog dont la quantité peut valoir 50 (ex: 50 votants procurés en un
+        // lot). count() ne comptait que le nombre de lignes/saisies (ex: 1 ou 2),
+        // ce qui créait un écart énorme et faux face au PV papier saisi en clair.
         $counters = VoteOption::orderBy('ordre_affichage')->get()->map(function ($opt) use ($bureau) {
             $plus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $opt->id)
                 ->where('action', '+1')
-                ->count();
+                ->sum('quantity');
             $minus = VoteLog::where('bureau_vote_id', $bureau->id)
                 ->where('vote_option_id', $opt->id)
                 ->where('action', '-1')
-                ->count();
+                ->sum('quantity');
 
             $systemCount = $plus - $minus;
 
