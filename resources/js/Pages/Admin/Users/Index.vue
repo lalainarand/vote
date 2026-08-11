@@ -178,9 +178,20 @@ const exportUrl = computed(() => {
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-700">
                             <template v-if="u.bureau">
-                                <span class="font-mono text-xs text-gray-500">{{ u.bureau.code }}</span>
-                                <span class="ml-2">{{ u.bureau.nom }}</span>
+                                <span class="font-mono text-xs text-gray-500">
+                                    {{ u.bureau.code }} -
+                                </span>
+
+                                <span
+                                    class="ml-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                    :class="u.bureau.is_procuration
+                                        ? 'bg-purple-100 text-purple-700'
+                                        : 'bg-blue-100 text-blue-700'"
+                                >
+                                    {{ u.bureau.is_procuration ? 'Procuration' : 'Individuelle' }}
+                                </span>
                             </template>
+
                             <span v-else class="text-gray-400 italic">—</span>
                         </td>
                         <!-- Mot de passe : masqué par défaut, révélé au clic -->

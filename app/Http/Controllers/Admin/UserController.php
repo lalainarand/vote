@@ -53,9 +53,10 @@ class UserController extends Controller
                 'email'           => $user->email,
                 'role'            => $user->roles->first()?->name ?? 'none',
                 'bureau'          => $user->bureauVote ? [
-                    'id'   => $user->bureauVote->id,
-                    'code' => $user->bureauVote->code,
-                    'nom'  => $user->bureauVote->nom,
+                    'id'             => $user->bureauVote->id,
+                    'code'           => $user->bureauVote->code,
+                    'nom'            => $user->bureauVote->nom,
+                    'is_procuration' => (bool) $user->bureauVote->is_procuration,
                 ] : null,
                 'vote_logs_count' => $user->vote_logs_count,
                 'created_at'      => $user->created_at?->format('d/m/Y H:i'),
