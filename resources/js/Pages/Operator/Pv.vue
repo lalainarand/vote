@@ -82,19 +82,22 @@ const controlDetails = computed(() => {
         details.push({ key: 'c1', level: 'error', title: 'C1 — Cohérence par option', message: `Écart avec le compteur système pour ${optionMismatches.value.length} élément(s) : ${noms}. L'enregistrement est bloqué tant que ces valeurs ne correspondent pas.` })
     }
 
-    // C2 : Plafond de voix (Max 9 voix par bulletin)
-    // const maxVoixPossibles = ballotsFound * 9
-    // if (totalVoixCandidats.value > maxVoixPossibles) {
-    //     details.push({
-    //         key: 'c2', level: 'error', title: 'C2 — Plafond de voix',
-    //         message: `Le total des voix (${totalVoixCandidats.value}) dépasse le maximum théorique (${maxVoixPossibles} voix pour ${ballotsFound} bulletins × 9).`
-    //     })
-    // } else {
-    //     details.push({ key: 'c2', level: 'ok', title: 'C2 — Plafond de voix', message: `Le total des voix (${totalVoixCandidats.value}) est cohérent (max autorisé : ${maxVoixPossibles}).` })
-    // }
+    // Bulletins valables = bulletins trouvés moins les blancs/nuls (ces derniers
+    // ne portent aucune voix candidat) — sert de base à C2 et C3.
+    const bulletinsValables = Math.max(0, ballotsFound - totalBlancsNuls.value)
+
+    // C2 : Plafond de voix (1 bulletin valable = 1 à 9 voix candidat maximum) — bloquant
+    const maxVoixPossibles = bulletinsValables * 9
+    if (totalVoixCandidats.value > maxVoixPossibles) {
+        details.push({
+            key: 'c2', level: 'error', title: 'C2 — Plafond de voix',
+            message: `Le total des voix candidats (${totalVoixCandidats.value}) dépasse le maximum théorique (${maxVoixPossibles} voix pour ${bulletinsValables} bulletin(s) valable(s) × 9 voix max). Vérifiez la saisie.`
+        })
+    } else {
+        details.push({ key: 'c2', level: 'ok', title: 'C2 — Plafond de voix', message: `Le total des voix candidats (${totalVoixCandidats.value}) est cohérent (max autorisé : ${maxVoixPossibles} pour ${bulletinsValables} bulletin(s) valable(s)).` })
+    }
 
     // C3 : Plancher de voix (Min 1 voix par bulletin valable)
-    const bulletinsValables = Math.max(0, ballotsFound - totalBlancsNuls.value)
     if (totalVoixCandidats.value < bulletinsValables) {
         details.push({
             key: 'c3', level: 'error', title: 'C3 — Plancher de voix',
@@ -122,7 +125,7 @@ const hasCriticalError = computed(() => controlDetails.value.some(d => d.level =
 const hasWarning = computed(() => controlDetails.value.some(d => d.level === 'warning'))
 
 const submit = () => {
-    if (hasCounterMismatch.value) return
+    if (hasCounterMismatch.value || hasCriticalError.value) return
     form.post('/operator/pv')
 }
 </script>
@@ -224,6 +227,9 @@ const submit = () => {
                 <p v-if="hasCounterMismatch" class="mt-3 text-sm font-medium text-red-700">
                     ⚠️ L'enregistrement est désactivé : corrigez les écarts entre le comptage système et votre saisie (voix et/ou nombre de bulletins) ci-dessus pour continuer.
                 </p>
+                <p v-else-if="hasCriticalError" class="mt-3 text-sm font-medium text-red-700">
+                    ⚠️ L'enregistrement est désactivé : le total des voix saisi n'est pas cohérent avec le nombre de bulletins (voir contrôle en erreur ci-dessus).
+                </p>
                 <p v-else-if="hasWarning" class="mt-3 text-sm font-medium text-amber-700">
                     ℹ️ Des écarts non bloquants subsistent. Vérifiez les chiffres avant validation si possible.
                 </p>
@@ -232,8 +238,8 @@ const submit = () => {
             <!-- Actions -->
             <div class="flex gap-3 pb-8">
                 <button type="submit"
-                        :disabled="form.processing || hasCounterMismatch"
-                        :title="hasCounterMismatch ? 'Corrigez les écarts avec le comptage système avant d\'enregistrer' : ''"
+                        :disabled="form.processing || hasCounterMismatch || hasCriticalError"
+                        :title="(hasCounterMismatch || hasCriticalError) ? 'Corrigez les écarts avec le comptage système et le nombre de voix avant d\'enregistrer' : ''"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 transition-colors">
                     Enregistrer le PV
                 </button>

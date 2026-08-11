@@ -10,6 +10,7 @@ use App\Models\BureauResult;
 use App\Models\BureauStatistic;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class PvEntryController extends Controller
@@ -81,6 +82,39 @@ class PvEntryController extends Controller
             'pv_data.*.count' => 'required|integer|min:0',
             'ballots_found' => 'required|integer|min:0', // Votants = Bulletins trouvés
         ]);
+
+        // Cohérence voix candidats / bulletins valables : un bulletin plurinominal
+        // porte de 1 à 9 voix candidat (les bulletins blancs/nuls n'en portent
+        // aucune). Rejeté ici aussi car la vérification côté client (Pv.vue) est
+        // contournable — ex. 1 bulletin trouvé mais 40 voix saisies au total.
+        $typesById = VoteOption::whereIn('id', collect($validated['pv_data'])->pluck('vote_option_id'))
+            ->pluck('type', 'id');
+
+        $totalVoixCandidats = 0;
+        $totalBlancsNuls = 0;
+        foreach ($validated['pv_data'] as $pv) {
+            $type = $typesById[$pv['vote_option_id']] ?? null;
+            if ($type === 'candidat') {
+                $totalVoixCandidats += $pv['count'];
+            } elseif ($type === 'blanc' || $type === 'nul') {
+                $totalBlancsNuls += $pv['count'];
+            }
+        }
+
+        $bulletinsValables = max(0, $validated['ballots_found'] - $totalBlancsNuls);
+        $maxVoixPossibles = $bulletinsValables * 9;
+
+        if ($totalVoixCandidats > $maxVoixPossibles) {
+            throw ValidationException::withMessages([
+                'pv_data' => "Le total des voix candidats ({$totalVoixCandidats}) dépasse le maximum théorique ({$maxVoixPossibles} voix pour {$bulletinsValables} bulletin(s) valable(s) × 9 voix max).",
+            ]);
+        }
+
+        if ($totalVoixCandidats < $bulletinsValables) {
+            throw ValidationException::withMessages([
+                'pv_data' => "Le total des voix candidats ({$totalVoixCandidats}) est inférieur au nombre de bulletins valables ({$bulletinsValables}). Chaque bulletin valable doit contenir au moins 1 voix.",
+            ]);
+        }
 
         DB::transaction(function () use ($validated, $bureau, $user) {
             // 1. Enregistrer les résultats par option
