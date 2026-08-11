@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BureauVote;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
+use App\Support\DangerousActionGuard;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -127,7 +128,7 @@ class BureauController extends Controller
         $bureau->load(['users', 'statistics', 'bureauResults.voteOption', 'voteLogs.user', 'adminValidator:id,name']);
 
         // Compteurs système
-        // ⚠️ sum('quantity'), pas count() : un vote par procuration est UNE ligne
+        // sum('quantity'), pas count() : un vote par procuration est UNE ligne
         // VoteLog dont la quantité peut valoir 50 (ex: 50 votants procurés en un
         // lot). count() ne comptait que le nombre de lignes/saisies (ex: 1 ou 2),
         // ce qui créait un écart énorme et faux face au PV papier saisi en clair.
@@ -239,13 +240,20 @@ class BureauController extends Controller
     /**
      * Verrouiller un bureau
      */
-    public function lock(BureauVote $bureau)
+    /**
+     * Marquer un bureau en anomalie : exclut son décompte des résultats
+     * généraux et de l'export Excel. Action dangereuse (impact direct sur les
+     * résultats officiels) : mot de passe admin + mot-clé réservé exigés.
+     */
+    public function lock(Request $request, BureauVote $bureau)
     {
+        DangerousActionGuard::verify($request);
+
         $bureau->update(['status' => 'anomaly']);
 
         return redirect()
             ->back()
-            ->with('success', 'Bureau verrouillé');
+            ->with('success', 'Bureau marqué en anomalie.');
     }
 
     /**

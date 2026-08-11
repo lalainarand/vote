@@ -26,6 +26,7 @@ class AuthorizedDevice extends Model
         'approved_by',
         'approved_at',
         'last_used_at',
+        'last_used_by',
     ];
 
     protected $casts = [
@@ -40,6 +41,16 @@ class AuthorizedDevice extends Model
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Dernier opérateur ayant utilisé cet appareil — purement informatif :
+     * l'appareil n'est jamais réservé à cet opérateur, un autre opérateur
+     * actif + approuvé peut s'y connecter juste après.
+     */
+    public function lastUsedBy()
+    {
+        return $this->belongsTo(User::class, 'last_used_by');
     }
 
     /**
@@ -72,12 +83,14 @@ class AuthorizedDevice extends Model
 
     /**
      * Met à jour les infos complémentaires (dernière utilisation, navigateur,
-     * plateforme, IP) à chaque connexion réussie depuis cet appareil.
+     * plateforme, IP, dernier opérateur) à chaque connexion réussie depuis cet
+     * appareil.
      */
-    public function touchUsage(Request $request): void
+    public function touchUsage(Request $request, ?User $user = null): void
     {
         $this->update([
             'last_used_at' => now(),
+            'last_used_by' => $user?->id ?? $this->last_used_by,
             'browser'      => UserAgentInfo::browser($request->userAgent()) ?? $this->browser,
             'platform'     => UserAgentInfo::platform($request->userAgent()) ?? $this->platform,
             'ip_address'   => $request->ip(),

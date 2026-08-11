@@ -58,7 +58,9 @@ const copyLink = async (d) => {
                     <div>
                         <label class="block text-xs font-medium text-gray-700 mb-1">Nom de l'appareil</label>
                         <input v-model="addForm.device_name" type="text" placeholder="Ex: Tablette 12"
-                               class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                               class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               :class="{ 'border-red-400': addForm.errors.device_name }" />
+                        <p v-if="addForm.errors.device_name" class="text-red-600 text-xs mt-1">{{ addForm.errors.device_name }}</p>
                     </div>
                     <button type="submit" :disabled="addForm.processing || !addForm.device_name"
                             class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
@@ -104,6 +106,7 @@ const copyLink = async (d) => {
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Nom</th>
+                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Dernier opérateur</th>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Dernière utilisation</th>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Navigateur / Plateforme</th>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Approuvé par</th>
@@ -113,10 +116,20 @@ const copyLink = async (d) => {
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-if="devices.length === 0">
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">Aucun appareil enregistré</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400">Aucun appareil enregistré</td>
                     </tr>
                     <tr v-for="d in devices" :key="d.id" class="hover:bg-gray-50">
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ d.device_name }}</td>
+                        <td class="px-4 py-3 text-xs text-gray-700">
+                            <template v-if="d.last_used_by">
+                                <div class="font-medium">{{ d.last_used_by.name }}</div>
+                                <div v-if="d.last_used_by.bureau" class="text-gray-400">
+                                    <span class="font-mono">{{ d.last_used_by.bureau.code }}</span> — {{ d.last_used_by.bureau.nom }}
+                                </div>
+                                <div v-else class="text-gray-400 italic">Sans bureau assigné</div>
+                            </template>
+                            <span v-else class="text-gray-300">—</span>
+                        </td>
                         <td class="px-4 py-3 text-xs text-gray-500 font-mono">{{ d.last_used_at ?? 'Jamais utilisé' }}</td>
                         <td class="px-4 py-3 text-xs text-gray-500">
                             <template v-if="d.browser || d.platform">{{ d.browser ?? '—' }} / {{ d.platform ?? '—' }}</template>

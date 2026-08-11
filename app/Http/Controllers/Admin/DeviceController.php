@@ -15,7 +15,7 @@ class DeviceController extends Controller
      */
     public function index()
     {
-        $devices = AuthorizedDevice::with('approvedBy:id,name')
+        $devices = AuthorizedDevice::with(['approvedBy:id,name', 'lastUsedBy:id,name,bureau_vote_id', 'lastUsedBy.bureauVote:id,code,nom'])
             ->orderByDesc('is_approved')
             ->orderBy('device_name')
             ->get()
@@ -30,6 +30,15 @@ class DeviceController extends Controller
                 'approved_by'   => $d->approvedBy?->name,
                 'approved_at'   => $d->approved_at?->format('d/m/Y H:i'),
                 'last_used_at'  => $d->last_used_at?->format('d/m/Y H:i'),
+                // Dernier opérateur connecté depuis cet appareil, purement informatif :
+                // l'appareil n'est jamais réservé à cet opérateur (voir modèle).
+                'last_used_by'  => $d->lastUsedBy ? [
+                    'name'   => $d->lastUsedBy->name,
+                    'bureau' => $d->lastUsedBy->bureauVote ? [
+                        'code' => $d->lastUsedBy->bureauVote->code,
+                        'nom'  => $d->lastUsedBy->bureauVote->nom,
+                    ] : null,
+                ] : null,
                 'pairing_url'   => route('device.pair', $d->device_token),
             ]);
 
@@ -61,7 +70,9 @@ class DeviceController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'device_name' => 'required|string|max:255',
+            'device_name' => 'required|string|max:255|unique:authorized_devices,device_name',
+        ], [
+            'device_name.unique' => 'Ce nom d\'appareil est déjà utilisé.',
         ]);
 
         AuthorizedDevice::create([
@@ -89,18 +100,31 @@ class DeviceController extends Controller
         ]);
 
         $prefix = $validated['prefix'] ?: 'Tablette';
-        $existing = AuthorizedDevice::where('device_name', 'like', $prefix . ' %')->count();
 
-        for ($i = 1; $i <= $validated['count']; $i++) {
-            $number = str_pad((string) ($existing + $i), 2, '0', STR_PAD_LEFT);
+        // Numérotation résiliente aux "trous" (ex: "Tablette 05" supprimée) : on
+        // avance jusqu'au premier nom encore libre plutôt que de se fier à un
+        // simple compte, sinon le nom (désormais unique en base) pourrait déjà
+        // exister et faire échouer la création.
+        $number = 1;
+        $created = 0;
+
+        while ($created < $validated['count']) {
+            $candidate = "{$prefix} " . str_pad((string) $number, 2, '0', STR_PAD_LEFT);
+            $number++;
+
+            if (AuthorizedDevice::where('device_name', $candidate)->exists()) {
+                continue;
+            }
 
             AuthorizedDevice::create([
                 'device_token' => AuthorizedDevice::generateToken(),
-                'device_name'  => "{$prefix} {$number}",
+                'device_name'  => $candidate,
                 'is_approved'  => true,
                 'approved_by'  => $request->user()->id,
                 'approved_at'  => now(),
             ]);
+
+            $created++;
         }
 
         return redirect()

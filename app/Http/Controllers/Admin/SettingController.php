@@ -5,22 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\DangerousActionGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class SettingController extends Controller
 {
-    /**
-     * Mot-clé fixe exigé en plus du mot de passe pour confirmer la
-     * réinitialisation complète de la base de données.
-     */
-    private const RESET_KEYWORD = 'JM-JM-1960';
-
     /**
      * Tables de données électorales vidées par la réinitialisation.
      * `settings` (config système) et `users` (traité à part, admin préservé)
@@ -97,18 +91,7 @@ class SettingController extends Controller
      */
     public function resetDatabase(Request $request)
     {
-        $validated = $request->validate([
-            'password' => 'required|string',
-            'keyword'  => 'required|string',
-        ]);
-
-        if (! Hash::check($validated['password'], $request->user()->password)) {
-            return back()->withErrors(['password' => 'Mot de passe incorrect.']);
-        }
-
-        if ($validated['keyword'] !== self::RESET_KEYWORD) {
-            return back()->withErrors(['keyword' => 'Mot-clé de confirmation incorrect.']);
-        }
+        DangerousActionGuard::verify($request);
 
         $adminIds = User::role('admin')->pluck('id');
 

@@ -81,7 +81,7 @@ class LoginRequest extends FormRequest
                 ]);
             }
 
-            $device->touchUsage($this);
+            $device->touchUsage($this, $user);
         }
 
         RateLimiter::clear($this->throttleKey());
