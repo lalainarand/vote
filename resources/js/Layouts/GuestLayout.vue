@@ -13,7 +13,7 @@
 
         <div class="relative w-full max-w-md">
             <div class="text-center mb-8">
-                <h1 class="text-2xl font-bold text-white tracking-tight">Système de comptage des votes</h1>
+                <h1 class="text-2xl font-bold text-white tracking-tight">Système de comptage des votes JM</h1>
             </div>
 
             <!-- Carte -->
@@ -22,7 +22,7 @@
             </div>
 
             <p class="text-center text-blue-300/60 text-xs mt-6">
-                © {{ new Date().getFullYear() }} — Système sécurisé
+                © 2026 — Système sécurisé
             </p>
         </div>
     </div>

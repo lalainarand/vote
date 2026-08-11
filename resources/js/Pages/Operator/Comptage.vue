@@ -22,6 +22,10 @@ const props = defineProps({
         type: Number,
         default: 0,
     },
+    max_procuration: {
+        type: Number,
+        default: 9999,
+    },
 })
 
 const showModal = ref(false) 
@@ -145,6 +149,10 @@ const submitProcuration = async () => {
         procurationModal.error = 'Entrez un nombre valide'
         return
     }
+    if (qty > props.max_procuration) {
+        procurationModal.error = `Le nombre de votants par procuration ne peut pas dépasser ${props.max_procuration}.`
+        return
+    }
 
     procurationModal.loading = true
     procurationModal.error = null
@@ -258,6 +266,10 @@ const submitBulletinManuel = async () => {
 
     if (!qty || qty < 1) {
         bulletinManuelModal.error = 'Entrez un nombre valide'
+        return
+    }
+    if (qty > props.max_procuration) {
+        bulletinManuelModal.error = `Le nombre de votants par procuration ne peut pas dépasser ${props.max_procuration}.`
         return
     }
 
@@ -849,12 +861,14 @@ onUnmounted(() => {
                         v-model.number="procurationModal.quantity"
                         type="number"
                         min="1"
+                        :max="max_procuration"
                         autofocus
                         placeholder="Ex: 12"
                         @keyup.enter="submitProcuration"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-lg font-semibold
                                focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
+                    <p class="text-xs text-gray-400 mt-1">Maximum {{ max_procuration }} votants par saisie</p>
                     <p v-if="procurationModal.error" class="text-sm text-red-600 mt-1.5">
                         {{ procurationModal.error }}
                     </p>
@@ -917,12 +931,14 @@ onUnmounted(() => {
                         v-model.number="bulletinManuelModal.quantity"
                         type="number"
                         min="1"
+                        :max="max_procuration"
                         autofocus
                         placeholder="Ex: 50"
                         @keyup.enter="submitBulletinManuel"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-lg font-semibold
                                focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
+                    <p class="text-xs text-gray-400 mt-1">Maximum {{ max_procuration }} votants par saisie</p>
                     <p v-if="bulletinManuelModal.error" class="text-sm text-red-600 mt-1.5">
                         {{ bulletinManuelModal.error }}
                     </p>

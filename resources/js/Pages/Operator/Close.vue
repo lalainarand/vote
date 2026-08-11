@@ -46,10 +46,10 @@ const closeBureau = () => {
                         <span class="text-sm text-gray-700">{{ r.nom }}</span>
                         <span class="text-lg font-bold text-gray-900">{{ r.count }}</span>
                     </div>
-                    <div class="flex items-center justify-between pt-3 border-t-2 border-gray-300">
+                    <!-- <div class="flex items-center justify-between pt-3 border-t-2 border-gray-300">
                         <span class="text-sm font-semibold text-gray-900">Total votes exprimés</span>
                         <span class="text-xl font-black text-blue-600">{{ totalVotes }}</span>
-                    </div>
+                    </div> -->
                 </div>
             </div>
 

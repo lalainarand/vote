@@ -112,11 +112,9 @@ const submitReset = async () => {
 }
 
 const restoreData = async (resetItem) => {
-    const isCounting = ['pending', 'counting', 'anomaly'].includes(props.bureau.status)
-    
-    const warningMsg = isCounting 
-        ? "ATTENTION : Cette action va REMETTRE À ZÉRO le comptage en cours, puis appliquer les valeurs de ce snapshot. Continuer ?"
-        : "ATTENTION : Vous n'êtes plus en phase de comptage. Cette action va AJOUTER ces valeurs au comptage actuel (correction). Continuer ?";
+    // Même verrou côté serveur que pour "Réinitialiser le comptage" : impossible
+    // une fois le PV saisi (le serveur renverra une erreur explicite le cas échéant).
+    const warningMsg = "ATTENTION : Cette action va REMETTRE À ZÉRO le comptage en cours, puis appliquer les valeurs de ce snapshot. Continuer ?"
 
     if (!confirm(warningMsg)) return;
 

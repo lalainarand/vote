@@ -15,7 +15,7 @@ const submit = () => form.post('/login', {
 
 <template>
     <GuestLayout>
-        <div class="mb-6">
+        <div class="mb-6 text-center">
             <h2 class="text-xl font-bold text-gray-900">Connexion</h2>
             <p class="text-sm text-gray-500 mt-1">Accédez à votre espace sécurisé</p>
         </div>

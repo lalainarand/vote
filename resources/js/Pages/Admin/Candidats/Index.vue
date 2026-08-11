@@ -1,6 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
+
 
 const props = defineProps({
     candidates: Array,
@@ -79,19 +81,22 @@ const onImgError = (e) => {
                             </div>
                         </td>
                        
-                        <td class="px-4 py-3 text-right space-x-3">
-                            <Link :href="`/admin/candidats/${c.id}/edit`"
-                                  class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                Modifier
-                            </Link>
-                            <button v-if="!c.has_logs"
-                                    @click="deleteCandidate(c.id, c.nom)"
-                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
-                                Supprimer
-                            </button>
-                            <span v-else class="text-xs text-gray-400 italic" title="Votes existants">
-                                🔒
-                            </span>
+                        <!-- colonnes actions -->
+                        <td class="px-4 py-3">
+                            <div class="flex items-center justify-end gap-3">
+                                <Link :href="`/admin/candidats/${c.id}/edit`"
+                                      class="text-blue-600 hover:text-blue-800 flex items-center">
+                                    <PencilSquareIcon class="h-5 w-5" />
+                                </Link>
+                                <button v-if="!c.has_logs"
+                                        @click="deleteCandidate(c.id, c.nom)"
+                                        class="text-red-600 hover:text-red-800 flex items-center">
+                                    <TrashIcon class="h-5 w-5" />
+                                </button>
+                                <span v-else class="text-xs text-gray-400 italic flex items-center" title="Votes existants">
+                                    🔒
+                                </span>
+                            </div>
                         </td>
                     </tr>
                 </tbody>

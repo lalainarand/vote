@@ -150,7 +150,7 @@ const markAnomaly = () => {
                         </td>
                     </tr>
                 </tbody>
-                <tfoot class="bg-gray-50 border-t-2 border-gray-200">
+                <!-- <tfoot class="bg-gray-50 border-t-2 border-gray-200">
                     <tr>
                         <td class="px-4 py-3 text-sm font-bold text-gray-900">Total</td>
                         <td class="px-4 py-3 text-center font-mono font-bold text-gray-900">{{ totalSystem }}</td>
@@ -163,7 +163,7 @@ const markAnomaly = () => {
                         </td>
                         <td></td>
                     </tr>
-                </tfoot>
+                </tfoot> -->
             </table>
         </div>
 

@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ResultController;
 use App\Http\Controllers\Admin\AuditController;
 use App\Http\Controllers\Admin\DeviceController;
+use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\DeviceRegistrationController;
 use App\Http\Controllers\Operator\DashboardController as OperatorDashboardController;
 use App\Http\Controllers\Operator\CountingController;
@@ -74,6 +75,14 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('devices/bulk', [DeviceController::class, 'storeBulk'])->name('devices.store-bulk');
     Route::patch('devices/{device}/toggle-approved', [DeviceController::class, 'toggleApproved'])->name('devices.toggle-approved');
     Route::delete('devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
+
+    // Paramètres (CRUD settings + réinitialisation complète de la base)
+    Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+    Route::post('settings', [SettingController::class, 'store'])->name('settings.store');
+    Route::put('settings/{setting}', [SettingController::class, 'update'])->name('settings.update');
+    Route::delete('settings/{setting}', [SettingController::class, 'destroy'])->name('settings.destroy');
+    Route::post('settings/reset-database', [SettingController::class, 'resetDatabase'])->name('settings.reset-database');
+
     Route::get('/debug/procuration-collisions', function () {
     $collisions = \App\Models\VoteLog::where('is_procuration', true)
         ->where(function ($q) {

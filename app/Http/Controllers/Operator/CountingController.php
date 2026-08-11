@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Operator;
 use App\Http\Controllers\Controller;
 use App\Models\BulletinImage;
 use App\Models\BulletinLog;
+use App\Models\Setting;
 use App\Models\VoteLog;
 use App\Models\VoteOption;
 use App\Models\VoteReset;
@@ -15,6 +16,15 @@ use Inertia\Inertia;
 
 class CountingController extends Controller
 {
+    /**
+     * Limite de votants saisissables en une fois dans les modales de saisie
+     * manuelle par procuration (vote candidat + bulletins), configurable par
+     * l'admin (Paramètres). 9999 si jamais configuré.
+     */
+    private function maxProcuration(): int
+    {
+        return (int) Setting::get('max_procuration', 9999);
+    }
     public function index()
     {
         $user = auth()->user();
@@ -75,6 +85,7 @@ class CountingController extends Controller
             'bulletin_count' => $this->currentBulletinCount($bureau->id),
             'bulletin_count_procuration' => BulletinLog::currentCountForBureau($bureau->id, true),
             'bulletin_count_individuel' => BulletinLog::currentCountForBureau($bureau->id, false),
+            'max_procuration' => $this->maxProcuration(),
         ]);
     }
 
@@ -151,8 +162,10 @@ class CountingController extends Controller
     {
         $validated = $request->validate([
             'vote_option_id'  => 'required|exists:vote_options,id',
-            'quantity'        => 'required|integer|min:1|max:9999',
+            'quantity'        => 'required|integer|min:1|max:' . $this->maxProcuration(),
             'bulletin_log_id' => 'nullable|exists:bulletin_logs,id', // 🆕
+        ], [
+            'quantity.max' => 'Le nombre de votants par procuration ne peut pas dépasser ' . $this->maxProcuration() . '.',
         ]);
 
         $user = auth()->user();
@@ -291,7 +304,9 @@ class CountingController extends Controller
     public function bulletinVoteManuel(Request $request)
     {
         $validated = $request->validate([
-            'quantity' => 'required|integer|min:1|max:9999',
+            'quantity' => 'required|integer|min:1|max:' . $this->maxProcuration(),
+        ], [
+            'quantity.max' => 'Le nombre de votants par procuration ne peut pas dépasser ' . $this->maxProcuration() . '.',
         ]);
 
         $user = auth()->user();
@@ -499,96 +514,101 @@ class CountingController extends Controller
             return response()->json(['error' => 'Ce snapshot a déjà été réactivé.'], 409);
         }
 
-        $snapshot = $voteReset->snapshot;
-        $isCounting = in_array($bureau->status, ['pending', 'counting', 'anomaly']);
+        // Même verrou que resetVotes() : impossible de réactiver un ancien snapshot
+        // une fois le PV saisi (le comptage n'est plus la source de vérité à ce stade).
+        if (!in_array($bureau->status, ['pending', 'counting', 'anomaly'])) {
+            return response()->json([
+                'error' => 'Le comptage ne peut plus être réinitialisé une fois le PV saisi.',
+            ], 403);
+        }
 
-        DB::transaction(function () use ($bureau, $user, $snapshot, $isCounting, $voteReset) {
+        $snapshot = $voteReset->snapshot;
+
+        DB::transaction(function () use ($bureau, $user, $snapshot, $voteReset) {
 
             // ── ÉTAPE 1 : Annuler l'état actuel pour que l'audit reste propre ──
-            if ($isCounting) {
-                // 1a. Annulation des candidats
-                $options = VoteOption::all();
-                foreach ($options as $opt) {
-                    $plus = VoteLog::where('bureau_vote_id', $bureau->id)
-                        ->where('vote_option_id', $opt->id)
-                        ->where('action', '+1')
-                        ->where(function ($q) {
-                            $q->whereNull('is_reset')->orWhere('is_reset', false);
-                        })
-                        ->sum('quantity');
-
-                    $minus = VoteLog::where('bureau_vote_id', $bureau->id)
-                        ->where('vote_option_id', $opt->id)
-                        ->where('action', '-1')
-                        ->where(function ($q) {
-                            $q->whereNull('is_reset')->orWhere('is_reset', false);
-                        })
-                        ->sum('quantity');
-
-                    $currentCount = $plus - $minus;
-
-                    if ($currentCount !== 0) {
-                        VoteLog::where('bureau_vote_id', $bureau->id)
-                            ->where('vote_option_id', $opt->id)
-                            ->where(function ($q) {
-                                $q->whereNull('is_reset')->orWhere('is_reset', false);
-                            })
-                            ->update(['is_reset' => true]);
-
-                        VoteLog::create([
-                            'bureau_vote_id' => $bureau->id,
-                            'vote_option_id' => $opt->id,
-                            'user_id'        => $user->id,
-                            'action'         => $currentCount > 0 ? '-1' : '+1',
-                            'quantity'       => abs($currentCount),
-                            'is_procuration' => false,
-                            'is_reset'       => true,
-                            'created_at'     => now(),
-                        ]);
-                    }
-                }
-
-                // 1b. Annulation des bulletins
-                $bPlus = BulletinLog::where('bureau_vote_id', $bureau->id)
+            // 1a. Annulation des candidats
+            $options = VoteOption::all();
+            foreach ($options as $opt) {
+                $plus = VoteLog::where('bureau_vote_id', $bureau->id)
+                    ->where('vote_option_id', $opt->id)
                     ->where('action', '+1')
                     ->where(function ($q) {
                         $q->whereNull('is_reset')->orWhere('is_reset', false);
                     })
                     ->sum('quantity');
-                $bMinus = BulletinLog::where('bureau_vote_id', $bureau->id)
+
+                $minus = VoteLog::where('bureau_vote_id', $bureau->id)
+                    ->where('vote_option_id', $opt->id)
                     ->where('action', '-1')
                     ->where(function ($q) {
                         $q->whereNull('is_reset')->orWhere('is_reset', false);
                     })
                     ->sum('quantity');
-                $currentBulletins = $bPlus - $bMinus;
 
-                if ($currentBulletins !== 0) {
-                    BulletinLog::where('bureau_vote_id', $bureau->id)
+                $currentCount = $plus - $minus;
+
+                if ($currentCount !== 0) {
+                    VoteLog::where('bureau_vote_id', $bureau->id)
+                        ->where('vote_option_id', $opt->id)
                         ->where(function ($q) {
                             $q->whereNull('is_reset')->orWhere('is_reset', false);
                         })
                         ->update(['is_reset' => true]);
 
-                    BulletinLog::create([
+                    VoteLog::create([
                         'bureau_vote_id' => $bureau->id,
+                        'vote_option_id' => $opt->id,
                         'user_id'        => $user->id,
-                        'action'         => $currentBulletins > 0 ? '-1' : '+1',
-                        'quantity'       => abs($currentBulletins),
-                        'is_manuel'      => true,
-                        'is_procuration' => (bool) $bureau->is_procuration,
+                        'action'         => $currentCount > 0 ? '-1' : '+1',
+                        'quantity'       => abs($currentCount),
+                        'is_procuration' => false,
                         'is_reset'       => true,
                         'created_at'     => now(),
                     ]);
                 }
-
-                // 1c. Annulation des photos actuellement actives
-                // (on invalide tout ce qui est actif avant de réactiver le snapshot,
-                // pour n'avoir jamais deux jeux de photos actifs en même temps)
-                BulletinImage::where('bureau_vote_id', $bureau->id)
-                    ->where('is_reset', false)
-                    ->update(['is_reset' => true]);
             }
+
+            // 1b. Annulation des bulletins
+            $bPlus = BulletinLog::where('bureau_vote_id', $bureau->id)
+                ->where('action', '+1')
+                ->where(function ($q) {
+                    $q->whereNull('is_reset')->orWhere('is_reset', false);
+                })
+                ->sum('quantity');
+            $bMinus = BulletinLog::where('bureau_vote_id', $bureau->id)
+                ->where('action', '-1')
+                ->where(function ($q) {
+                    $q->whereNull('is_reset')->orWhere('is_reset', false);
+                })
+                ->sum('quantity');
+            $currentBulletins = $bPlus - $bMinus;
+
+            if ($currentBulletins !== 0) {
+                BulletinLog::where('bureau_vote_id', $bureau->id)
+                    ->where(function ($q) {
+                        $q->whereNull('is_reset')->orWhere('is_reset', false);
+                    })
+                    ->update(['is_reset' => true]);
+
+                BulletinLog::create([
+                    'bureau_vote_id' => $bureau->id,
+                    'user_id'        => $user->id,
+                    'action'         => $currentBulletins > 0 ? '-1' : '+1',
+                    'quantity'       => abs($currentBulletins),
+                    'is_manuel'      => true,
+                    'is_procuration' => (bool) $bureau->is_procuration,
+                    'is_reset'       => true,
+                    'created_at'     => now(),
+                ]);
+            }
+
+            // 1c. Annulation des photos actuellement actives
+            // (on invalide tout ce qui est actif avant de réactiver le snapshot,
+            // pour n'avoir jamais deux jeux de photos actifs en même temps)
+            BulletinImage::where('bureau_vote_id', $bureau->id)
+                ->where('is_reset', false)
+                ->update(['is_reset' => true]);
 
             // ── ÉTAPE 2 : Réactiver les valeurs du snapshot ──
 
@@ -645,9 +665,7 @@ class CountingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $isCounting
-                ? 'Comptage, bulletins et photos réactivés avec succès.'
-                : 'Données du snapshot réactivées avec succès (mode correction additive).',
+            'message' => 'Comptage, bulletins et photos réactivés avec succès.',
         ]);
     }
 }

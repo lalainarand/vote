@@ -140,7 +140,7 @@ const submit = () => {
                 <table class="w-full">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">Option</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">candidats</th>
                             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-600">Compteur système</th>
                             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-600">PV papier (Saisie)</th>
                             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-600">Écart</th>
@@ -178,17 +178,17 @@ const submit = () => {
                         <span class="text-sm font-medium text-blue-800">📊 Bulletins comptés (Système)</span>
                         <span class="text-xl font-bold font-mono text-blue-900">{{ system_ballots_count }}</span>
                     </div>
-                    <div class="p-3 bg-indigo-50 rounded-lg border border-indigo-200 flex justify-between items-center">
+                    <!-- <div class="p-3 bg-indigo-50 rounded-lg border border-indigo-200 flex justify-between items-center">
                         <span class="text-sm font-medium text-indigo-800">🗳️ Total des voix (Candidats)</span>
                         <span class="text-xl font-bold font-mono text-indigo-900">{{ totalVoixCandidats }}</span>
-                    </div>
+                    </div> -->
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">
                         Nombre de bulletins trouvés (Saisie manuelle)
                         <span class="block text-xs font-normal text-gray-500 mt-0.5">
-                            Rappel : 1 bulletin peut contenir de 1 à 9 voix. Le nombre de votants est automatiquement égal à ce chiffre.
+                            Rappel : 1 bulletin peut contenir de 1 à 9 voix.
                         </span>
                     </label>
                     <input v-model.number="form.ballots_found" type="number" min="0"

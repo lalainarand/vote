@@ -13,20 +13,23 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Admin
-        $admin = User::updateOrCreate(
+        // Admin — firstOrCreate (PAS updateOrCreate) : si le compte admin existe déjà,
+        // on ne le touche surtout pas (mot de passe éventuellement personnalisé par
+        // l'admin lui-même). Ne sert qu'à amorcer le tout premier admin d'une
+        // installation neuve, et rend le seeder sûr à rejouer (ex: réinitialisation
+        // de la base de données, qui préserve volontairement le compte admin).
+        $admin = User::firstOrCreate(
             ['email' => 'admin@eglise.mg'],
             [
                 'name'           => 'Administrateur',
-                'email'          => 'admin@eglise.mg',
                 'password'       => Hash::make('#password98765432101#'),
                 'password_plain' => '#password98765432101#',
                 'bureau_vote_id' => null,
                 'is_active'      => true,
-                'is_approved'    => true
+                'is_approved'    => true,
             ]
         );
-        $admin->assignRole('admin'); // ← Spatie
+        $admin->assignRole('admin'); // ← Spatie (idempotent, sûr même si déjà assigné)
 
         // Opérateurs
         $operators = [

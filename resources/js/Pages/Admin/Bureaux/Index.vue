@@ -1,6 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
+
 import { ref } from 'vue'
 
 const props = defineProps({
@@ -173,24 +175,26 @@ const hideTooltip = () => {
                             </Link>
                         </td>
 
-                        <!-- Actions -->
-                        <td class="px-4 py-3 text-right space-x-2">
-                            <Link :href="`/admin/bureaux/${bureau.id}`"
-                                  class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
-                                  title="Voir la tendance (Système vs PV papier) et valider / marquer anomalie">
-                                PV
-                            </Link>
+                        <!-- colonnes Actions -->
+                        <td class="px-4 py-3">
+                            <div class="flex items-center justify-end gap-2">
+                                <Link :href="`/admin/bureaux/${bureau.id}`"
+                                      class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                                      title="Voir la tendance (Système vs PV papier) et valider / marquer anomalie">
+                                    PV
+                                </Link>
 
-                            <Link :href="`/admin/bureaux/${bureau.id}/edit`"
-                                  class="text-blue-600 hover:text-blue-800 text-xs font-semibold px-2 py-1 rounded hover:bg-blue-50 transition-colors">
-                                Modifier
-                            </Link>
+                                <Link :href="`/admin/bureaux/${bureau.id}/edit`"
+                                      class="text-blue-600 hover:text-blue-800 flex items-center px-1 py-1 rounded hover:bg-blue-50 transition-colors">
+                                    <PencilSquareIcon class="w-5 h-5" />
+                                </Link>
 
-                            <button v-if="bureau.status == 'pending' || bureau.status == 'counting'"
-                                    @click="deleteBureau(bureau.id)"
-                                    class="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 transition-colors">
-                                Suppr.
-                            </button>
+                                <button v-if="bureau.status == 'pending' || bureau.status == 'counting'"
+                                        @click="deleteBureau(bureau.id)"
+                                        class="text-red-600 hover:text-red-800 flex items-center px-1 py-1 rounded hover:bg-red-50 transition-colors">
+                                    <TrashIcon class="w-5 h-5" />
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 </tbody>
